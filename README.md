@@ -1,0 +1,60 @@
+graph TD
+    subgraph Local Mac
+        User[(Engineer)]
+        WebUI[Web UI (React)]
+        APIGW[FastAPI API]
+        LocalDisk[(Local Disk - ./data)]
+        SQLite[(SQLite DB)]
+        Celery[Celery (eager mode)]
+        Logs[(JSON log files)]
+    end
+    User -->|HTTPS| WebUI
+    WebUI --> APIGW
+    APIGW --> LocalDisk
+    APIGW --> SQLite
+    APIGW --> Celery
+    Celery --> LocalDisk
+    Celery --> SQLite
+    Celery --> Logs
+    %% future prod pieces, disabled in dev
+    APIGW -.-> OIDC[(OIDC SSO)]
+    APIGW -.-> SNOW[(ServiceNow)]
+    Celery -.-> Splunk[(Splunk HEC)]
+    Celery -.-> S3[(S3/MinIO)]
+    Celery -.-> Broker[(RabbitMQ)]
+    SQLite -.-> Postgres[(PostgreSQL)]
+Solid lines are active in the POC; dashed lines are placeholders kept in code but turned off via config.
+
+pcap-tool/
+├─ .env.example           # sample config; copy to .env for local run
+├─ docker-compose.dev.yml # optional: spin up RabbitMQ/S3 later
+├─ README.md
+├─ pyproject.toml
+├─ src/
+│  ├─ api/                # FastAPI routes
+│  ├─ services/           # orchestration logic
+│  ├─ workers/            # Celery tasks (auto-eager in dev)
+│  ├─ adapters/
+│  │   ├─ snow.py         # ServiceNow client (stub in dev)
+│  │   ├─ splunk.py       # Splunk HEC client (stub in dev)
+│  │   └─ storage.py      # S3 vs. local-disk abstraction
+│  ├─ models/             # Pydantic & ORM
+│  ├─ utils/              # helpers, logging
+│  └─ config.py           # Pydantic BaseSettings (DEV/PROD switch)
+├─ stubs/                 # lightweight mocks for external services
+│  └─ __init__.py
+├─ tests/                 # pytest suites
+├─ scripts/               # CLI tools (db init, demo upload)
+├─ migrations/            # Alembic (SQLite→Postgres compatible)
+└─ docs/                  # architecture notes, run-books
+Key tweaks
+
+stubs/ & adapters/*—production clients and dev mocks share the same interface, so swapping is just settings.env.
+
+storage.py—writes to ./data/ in dev, S3 in prod.
+
+config.py—single source of truth; ENV=dev sets SQLite, eager Celery, stub ServiceNow, etc.
+
+docker-compose.dev.yml—optional; lets you add RabbitMQ or MinIO locally without changing code.
+
+These changes keep the codebase production-ready while letting you run everything on your Mac today with uvicorn src.api.main:app --reload.
