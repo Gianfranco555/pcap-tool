@@ -183,11 +183,11 @@ def _parse_with_pyshark(file_path: str, max_packets: Optional[int]) -> Generator
     try:
         cap = pyshark.FileCapture(
             file_path,
-            use_json=True,
-            include_raw=True, # Keep for raw_summary, can be removed if raw_summary not critical
-            keep_packets=False # Good for memory
+            use_json=False,  # standard text format so TLS fields like SNI are parsed
+            include_raw=False,  # raw payload not needed when using text format
+            keep_packets=False  # Good for memory
         )
-    except pyshark.capture.capture.TSharkNotFoundException as e_tshark:
+    except pyshark.tshark.tshark.TSharkNotFoundException as e_tshark:
         logger.error(f"PyShark TSharkNotFoundException: {e_tshark}. Ensure TShark is installed and in PATH.")
         raise RuntimeError(f"PyShark critical error: TShark not found.") from e_tshark
     except Exception as e_init:
