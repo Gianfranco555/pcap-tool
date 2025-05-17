@@ -7,3 +7,4 @@ __pycache__/
 # PCAPs
 *.pcap
 *.pcapng
+!tests/fixtures/*.pcapng

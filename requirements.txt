@@ -1,3 +1,4 @@
 pyshark>=0.6
-pcapkit>=0.9
+pypcapkit[pyshark]==1.3.5.post17  # latest as of May 2025:contentReference[oaicite:0]{index=0}
+pandas==2.2.3                     # pre-built wheels exist on PyPI
 pytest>=7.0
