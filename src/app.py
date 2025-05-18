@@ -2,8 +2,9 @@
 import streamlit as st
 
 # TODO: implement
-from src.pcap_tool.parser import parse_pcap  # noqa: F401  # TODO: implement
-from src.pcap_tool.heuristics.engine import (  # noqa: F401
+from pcap_tool.parser import parse_pcap
+from heuristics.engine import HeuristicEngine
+
     HeuristicEngine,  # TODO: implement
 )
 
