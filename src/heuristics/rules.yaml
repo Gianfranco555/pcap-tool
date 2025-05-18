@@ -1,0 +1,188 @@
+# rules.yaml
+
+# 1. Define the new columns you want to create and link them to rule groups.
+target_column_map:
+  flow_disposition_rules: "flow_disposition"        # To categorize flow as Allowed, Blocked, Degraded etc.
+  traffic_type_rules: "traffic_type_guess"         # To make a guess about the type of traffic.
+  security_observation_rules: "security_observation" # To flag potential security issues.
+  zscaler_context_rules: "zscaler_specific_finding" # For Zscaler specific observations
+
+# 2. Define default values for these new columns.
+default_values:
+  flow_disposition: "Undetermined"
+  traffic_type_guess: "Unknown"
+  security_observation: "None"
+  zscaler_specific_finding: "N/A"
+
+# 3. Define the rule sets. The keys here MUST match the keys in target_column_map.
+
+# Rule set for the 'flow_disposition' column
+flow_disposition_rules:
+  - name: "Zscaler Policy Block - RST"
+    output_value: "Blocked - Zscaler Policy (RST)"
+    conditions:
+      - field: "zscaler_policy_block_type"
+        operator: "equals"
+        value: "TCP_RST_FROM_ZSCALER"
+    stop_processing: true # If it's a Zscaler RST block, we're confident.
+
+  - name: "Zscaler Policy Block - HTTP Code"
+    output_value_format: "Blocked - Zscaler Policy ({zscaler_policy_block_type})"
+    conditions:
+      - field: "zscaler_policy_block_type"
+        operator: "starts_with"
+        value: "HTTP_"
+      - field: "is_zscaler_ip" # Making sure it's a Zscaler IP involved
+        operator: "equals"
+        value: true
+    stop_processing: true
+
+  - name: "Zscaler Policy Block - TLS Alert"
+    output_value_format: "Blocked - Zscaler Policy (TLS Alert: {tls_alert_message_description})"
+    conditions:
+      - field: "zscaler_policy_block_type"
+        operator: "starts_with"
+        value: "TLS_FATAL_ALERT_FROM_ZSCALER_"
+      - field: "is_zscaler_ip"
+        operator: "equals"
+        value: true
+    stop_processing: true
+
+  - name: "TCP Reset (RST) from Destination"
+    output_value: "Connection Reset (RST)"
+    conditions:
+      - field: "tcp_flags_rst"
+        operator: "equals"
+        value: true
+      - field: "is_zscaler_ip" # Example: don't flag if Zscaler already identified it
+        operator: "equals"
+        value: false
+    # stop_processing: false # Could be other reasons, maybe let other rules evaluate
+
+  - name: "Successful TLS Handshake (Observed)"
+    output_value: "Allowed - Likely (TLS Handshake OK)"
+    conditions:
+      - field: "protocol"
+        operator: "equals"
+        value: "TCP"
+      - field: "tls_handshake_type" # Check for ServerHello or a common handshake message
+        operator: "in"
+        value: ["ServerHello", "Finished"] # Assuming parser can populate these
+      - field: "tls_alert_message_description"
+        operator: "not_exists"
+    # This is a weak signal for "Allowed", so stop_processing is likely false
+
+  - name: "TCP SYN-ACK Seen"
+    output_value: "Allowed - Likely (SYN-ACK)"
+    conditions:
+      - field: "tcp_flags_syn"
+        operator: "equals"
+        value: true
+      - field: "tcp_flags_ack"
+        operator: "equals"
+        value: true
+    # Also a weaker signal for allowed on its own.
+
+# Rule set for the 'traffic_type_guess' column
+traffic_type_rules:
+  - name: "Likely HTTPS Traffic"
+    output_value: "HTTPS (TLS)"
+    conditions:
+      - field: "destination_port"
+        operator: "equals"
+        value: 443
+      - field: "protocol"
+        operator: "equals"
+        value: "TCP"
+      - field: "sni" # Server Name Indication exists
+        operator: "exists"
+    stop_processing: true
+
+  - name: "Likely HTTP Traffic"
+    output_value: "HTTP"
+    conditions:
+      - field: "destination_port"
+        operator: "equals"
+        value: 80
+      - field: "protocol"
+        operator: "equals"
+        value: "TCP"
+      - field: "http_request_method" # HTTP method seen
+        operator: "exists"
+    stop_processing: true
+
+  - name: "DNS Traffic"
+    output_value: "DNS"
+    conditions:
+      - field: "destination_port"
+        operator: "equals"
+        value: 53
+      - field: "protocol"
+        operator: "in"
+        value: ["UDP", "TCP"]
+      - field: "dns_query_name"
+        operator: "exists"
+    stop_processing: true
+
+  - name: "ICMP Traffic"
+    output_value: "ICMP"
+    conditions:
+      - field: "protocol"
+        operator: "equals"
+        value: "ICMP" # Or use "ICMPv6" if your parser normalizes this or L3 protocol
+    stop_processing: true
+
+# Rule set for 'security_observation'
+security_observation_rules:
+  - name: "TLS to Non-Standard Port"
+    output_value: "TLS on Non-Standard Port"
+    conditions:
+      - field: "sni"
+        operator: "exists"
+      - field: "destination_port"
+        operator: "not_in"
+        value: [443, 853] # Standard TLS, DNS over TLS
+    stop_processing: false # Could be legitimate, just an observation
+
+  - name: "Plain HTTP POST Request"
+    output_value: "Sensitive Data (HTTP POST)"
+    conditions:
+      - field: "http_request_method"
+        operator: "equals"
+        value: "POST"
+      - field: "destination_port"
+        operator: "equals"
+        value: 80 # Unencrypted HTTP
+    stop_processing: false
+
+  - name: "Self-Signed or Untrusted TLS Cert (Placeholder)"
+    output_value: "Potential Untrusted TLS Certificate"
+    conditions:
+      # This requires parser.py to extract certificate details and Zscaler to check trust.
+      # For now, let's imagine a field 'tls_certificate_is_trusted' exists and is false.
+      - field: "ssl_inspection_active" # This is a placeholder from parser.py
+        operator: "equals"             # You'd need logic in parser or here for actual detection
+        value: false # Example: if inspection IS NOT active AND SNI points to internal, maybe suspicious
+                     # Or, if a field like 'tls_cert_validation_error' exists from parser
+    # This rule is highly dependent on parser capabilities not fully shown yet.
+
+# Rule set for 'zscaler_specific_finding'
+zscaler_context_rules:
+  - name: "Zscaler Private Access Synthetic IP"
+    output_value: "ZPA Synthetic IP Communication"
+    conditions:
+      - field: "is_zpa_synthetic_ip"
+        operator: "equals"
+        value: true
+    stop_processing: true
+
+  - name: "Traffic to/from Zscaler Cloud"
+    output_value: "Interacting with Zscaler Cloud IP"
+    conditions:
+      - field: "is_zscaler_ip"
+        operator: "equals"
+        value: true
+      - field: "is_zpa_synthetic_ip" # Avoid double-tagging if already ZPA
+        operator: "equals"
+        value: false
+    stop_processing: false # Might be interesting in conjunction with other findings
