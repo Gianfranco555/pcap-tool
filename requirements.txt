@@ -1,6 +1,37 @@
+# Core Parsing, Analysis & Testing
 pyshark>=0.6
-pypcapkit[pyshark]==1.3.5.post17  # latest as of May 2025:contentReference[oaicite:0]{index=0}
-pandas==2.2.3                     # pre-built wheels exist on PyPI
-pytest>=7.0
-scapy>=2.5
-pyyaml ipaddress
+pypcapkit[pyshark]==1.3.5.post17 # Fallback parser; latest as of May 2025 (as per your initial file)
+pandas==2.2.3                   # For data manipulation (as per your initial file)
+pyyaml                          # For engine.py rules configuration
+scapy>=2.5                        # For test pcap generation and potential direct parsing
+pytest>=7.0                       # For running tests
+
+# Web API Framework (FastAPI as per README)
+fastapi
+uvicorn[standard]                 # ASGI server for FastAPI
+
+# Data Models & Configuration (Pydantic as per README and common with FastAPI)
+pydantic
+pydantic-settings               # For BaseSettings in config.py if using Pydantic v2+
+
+# Background Tasks (Celery as per README)
+celery
+redis                           # Common message broker for Celery (RabbitMQ also an option via docker-compose)
+
+# Database ORM & Migrations (SQLAlchemy, Alembic, PostgreSQL as per README)
+sqlalchemy                        # ORM
+alembic                         # Database migrations
+psycopg2-binary                 # PostgreSQL driver (for production/testing with Postgres)
+
+# OpenAI Integration (AI Summaries, RAG as per spec & Action Plan)
+openai                          # Official OpenAI Python library
+faiss-cpu                       # For local vector embeddings (RAG)
+tiktoken                        # For token counting with OpenAI models (often needed)
+
+# Streamlit UI (As per Action Plan for UI development)
+streamlit
+
+# Utilities
+python-dotenv                   # For loading .env files (as per README)
+requests                        # General-purpose HTTP library (often a dependency or useful for integrations)
+
