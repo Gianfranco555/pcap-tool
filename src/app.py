@@ -17,7 +17,7 @@ import streamlit as st
 # If pcap_tool is a directory directly under src/ (i.e., src/pcap_tool/)
 # and heuristics is under pcap_tool (i.e., src/pcap_tool/heuristics/)
 from pcap_tool.parser import parse_pcap
-from pcap_tool.heuristics.engine import HeuristicEngine # Corrected this based on typical module structure
+from heuristics.engine import HeuristicEngine
 
 st.set_page_config(page_title="PCAP Analysis Tool")
 st.title("PCAP Analysis Tool")
