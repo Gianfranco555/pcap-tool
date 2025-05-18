@@ -3,7 +3,6 @@ Cython
 pyshark>=0.6
 pypcapkit[pyshark]==1.3.5.post17 # Fallback parser; latest as of May 2025 (as per your initial file)
 pandas==2.2.3                   # For data manipulation (as per your initial file)
-pyyaml                          # For engine.py rules configuration
 scapy>=2.5                        # For test pcap generation and potential direct parsing
 pytest>=7.0                       # For running tests
 
