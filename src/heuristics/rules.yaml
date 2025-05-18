@@ -16,173 +16,285 @@ default_values:
 
 # 3. Define the rule sets. The keys here MUST match the keys in target_column_map.
 
+# ==============================================================================
 # Rule set for the 'flow_disposition' column
+# ==============================================================================
+# Order is important: Zscaler specific blocks first, then general connection issues.
 flow_disposition_rules:
+  # --- Zscaler Specific (from existing rules.yaml) ---
   - name: "Zscaler Policy Block - RST"
     output_value: "Blocked - Zscaler Policy (RST)"
     conditions:
-      - field: "zscaler_policy_block_type"
-        operator: "equals"
-        value: "TCP_RST_FROM_ZSCALER"
-    stop_processing: true # If it's a Zscaler RST block, we're confident.
+      - {field: "zscaler_policy_block_type", operator: "equals", value: "TCP_RST_FROM_ZSCALER"}
+    stop_processing: true
 
   - name: "Zscaler Policy Block - HTTP Code"
     output_value_format: "Blocked - Zscaler Policy ({zscaler_policy_block_type})"
     conditions:
-      - field: "zscaler_policy_block_type"
-        operator: "starts_with"
-        value: "HTTP_"
-      - field: "is_zscaler_ip" # Making sure it's a Zscaler IP involved
-        operator: "equals"
-        value: true
+      - {field: "zscaler_policy_block_type", operator: "starts_with", value: "HTTP_"}
+      - {field: "is_zscaler_ip", operator: "equals", value: true} # Ensure it's a Zscaler IP
     stop_processing: true
 
   - name: "Zscaler Policy Block - TLS Alert"
-    output_value_format: "Blocked - Zscaler Policy (TLS Alert: {tls_alert_message_description})"
+    output_value_format: "Blocked - Zscaler Policy (TLS Alert: {tls_alert_message_description})" # Using field from parser
     conditions:
-      - field: "zscaler_policy_block_type"
-        operator: "starts_with"
-        value: "TLS_FATAL_ALERT_FROM_ZSCALER_"
-      - field: "is_zscaler_ip"
-        operator: "equals"
-        value: true
+      - {field: "zscaler_policy_block_type", operator: "starts_with", value: "TLS_FATAL_ALERT_FROM_ZSCALER_"}
+      - {field: "is_zscaler_ip", operator: "equals", value: true} # Ensure it's a Zscaler IP
     stop_processing: true
 
-  - name: "TCP Reset (RST) from Destination"
-    output_value: "Connection Reset (RST)"
+  # --- Generic Connection Issues & Errors ---
+  - name: "Connection Refused by Destination (RST)" # More specific RST
+    output_value: "Blocked - Connection Refused (RST from Destination)"
     conditions:
-      - field: "tcp_flags_rst"
-        operator: "equals"
-        value: true
-      - field: "is_zscaler_ip" # Example: don't flag if Zscaler already identified it
-        operator: "equals"
-        value: false
-    # stop_processing: false # Could be other reasons, maybe let other rules evaluate
+      # Ideal conditions (require parser enhancements for `initiator` and flow-aware `tcp_handshake_failed_early_rst`):
+      # - {field: "tcp_flags_rst", operator: "equals", value: true}
+      # - {field: "initiator", operator: "equals", value: "client"} # Hypothetical: Indicates original SYN was from this flow's src_ip
+      # - {field: "tcp_handshake_failed_early_rst", operator: "equals", value: true} # Hypothetical: Parser sets if SYN -> RST sequence
+      # Simpler with current fields (less precise, might overlap with general RST if not ordered carefully):
+      - {field: "tcp_flags_rst", operator: "equals", value: true}
+      - {field: "tcp_flags_ack", operator: "equals", value: true} # RST,ACK is common for refused SYN
+      # - {field: "tcp_stream_index", operator: "exists"} # Ensure it's part of a TCP stream
+      # - {field: "flow_packet_count_before_this", operator: "lt", value: 3} # Hypothetical: if very few packets before this server RST
+    stop_processing: true # If we are confident it's a connection refusal.
 
-  - name: "Successful TLS Handshake (Observed)"
+  - name: "Host Unreachable (ICMP)"
+    output_value_format: "Network Error - Host Unreachable ({protocol} Type:{icmp_type}/Code:{icmp_code})"
+    conditions:
+      - {field: "protocol",  operator: "in", value: ["ICMP", "ICMPv6"]}
+      - {field: "icmp_type", operator: "equals", value: 3}
+      - {field: "icmp_code", operator: "equals", value: 1}
+    stop_processing: true
+
+  - name: "Port Unreachable (ICMP)"
+    output_value_format: "Network Error - Port Unreachable ({protocol} Type:{icmp_type}/Code:{icmp_code})"
+    conditions:
+      - {field: "protocol",  operator: "in", value: ["ICMP", "ICMPv6"]}
+      - {field: "icmp_type", operator: "equals", value: 3}
+      - {field: "icmp_code", operator: "equals", value: 3}
+    stop_processing: true
+
+  # --- DNS Specific Outcomes ---
+  - name: "DNS Resolution Successful (NOERROR)"
+    output_value_format: "DNS Resolution OK ({dns_query_name} -> {dns_response_addresses})" # Using existing parser fields
+    conditions:
+      - {field: "dns_response_code", operator: "equals", value: "NOERROR"} # Matches PcapRecord.dns_response_code
+    stop_processing: false # DNS success is an event, not always the final disposition of a larger flow
+
+  - name: "DNS Resolution Failed (NXDOMAIN)"
+    output_value_format: "DNS Error - Non-Existent Domain ({dns_query_name})"
+    conditions:
+      - {field: "dns_response_code", operator: "equals", value: "NXDOMAIN"}
+    stop_processing: true # Often a definitive failure for the flow's goal
+
+  - name: "DNS Resolution Failed (SERVFAIL)"
+    output_value_format: "DNS Error - Server Failure ({dns_query_name})"
+    conditions:
+      - {field: "dns_response_code", operator: "equals", value: "SERVFAIL"}
+    stop_processing: true # Often a definitive failure
+
+  # --- TCP State Indicators (Order these after definitive blocks/errors) ---
+  - name: "TCP Handshake Successful (Flow)" # Relies on parser enhancement
+    output_value: "Allowed - TCP Handshake OK"
+    conditions:
+      - {field: "tcp_handshake_successful", operator: "equals", value: true} # DERIVED FIELD NEEDED
+    stop_processing: false # Allow TLS handshake or app data to further classify
+
+  - name: "Successful TLS Handshake (Observed)" # Existing rule, good to keep
     output_value: "Allowed - Likely (TLS Handshake OK)"
     conditions:
-      - field: "protocol"
-        operator: "equals"
-        value: "TCP"
-      - field: "tls_handshake_type" # Check for ServerHello or a common handshake message
-        operator: "in"
-        value: ["ServerHello", "Finished"] # Assuming parser can populate these
-      - field: "tls_alert_message_description"
-        operator: "not_exists"
-    # This is a weak signal for "Allowed", so stop_processing is likely false
-
-  - name: "TCP SYN-ACK Seen"
-    output_value: "Allowed - Likely (SYN-ACK)"
-    conditions:
-      - field: "tcp_flags_syn"
-        operator: "equals"
-        value: true
-      - field: "tcp_flags_ack"
-        operator: "equals"
-        value: true
-    # Also a weaker signal for allowed on its own.
-
-# Rule set for the 'traffic_type_guess' column
-traffic_type_rules:
-  - name: "Likely HTTPS Traffic"
-    output_value: "HTTPS (TLS)"
-    conditions:
-      - field: "destination_port"
-        operator: "equals"
-        value: 443
-      - field: "protocol"
-        operator: "equals"
-        value: "TCP"
-      - field: "sni" # Server Name Indication exists
-        operator: "exists"
-    stop_processing: true
-
-  - name: "Likely HTTP Traffic"
-    output_value: "HTTP"
-    conditions:
-      - field: "destination_port"
-        operator: "equals"
-        value: 80
-      - field: "protocol"
-        operator: "equals"
-        value: "TCP"
-      - field: "http_request_method" # HTTP method seen
-        operator: "exists"
-    stop_processing: true
-
-  - name: "DNS Traffic"
-    output_value: "DNS"
-    conditions:
-      - field: "destination_port"
-        operator: "equals"
-        value: 53
-      - field: "protocol"
-        operator: "in"
-        value: ["UDP", "TCP"]
-      - field: "dns_query_name"
-        operator: "exists"
-    stop_processing: true
-
-  - name: "ICMP Traffic"
-    output_value: "ICMP"
-    conditions:
-      - field: "protocol"
-        operator: "equals"
-        value: "ICMP" # Or use "ICMPv6" if your parser normalizes this or L3 protocol
-    stop_processing: true
-
-# Rule set for 'security_observation'
-security_observation_rules:
-  - name: "TLS to Non-Standard Port"
-    output_value: "TLS on Non-Standard Port"
-    conditions:
-      - field: "sni"
-        operator: "exists"
-      - field: "destination_port"
-        operator: "not_in"
-        value: [443, 853] # Standard TLS, DNS over TLS
-    stop_processing: false # Could be legitimate, just an observation
-
-  - name: "Plain HTTP POST Request"
-    output_value: "Sensitive Data (HTTP POST)"
-    conditions:
-      - field: "http_request_method"
-        operator: "equals"
-        value: "POST"
-      - field: "destination_port"
-        operator: "equals"
-        value: 80 # Unencrypted HTTP
+      - {field: "protocol", operator: "equals", value: "TCP"}
+      - {field: "tls_handshake_type", operator: "in", value: ["ServerHello", "Finished"]}
+      - {field: "tls_alert_message_description", operator: "not_exists"}
     stop_processing: false
 
-  - name: "Self-Signed or Untrusted TLS Cert (Placeholder)"
+  - name: "TCP SYN-ACK Seen (Connection Progressing)" # Existing rule, good indicator
+    output_value: "Connection Progressing (SYN-ACK)"
+    conditions:
+      - {field: "tcp_flags_syn", operator: "equals", value: true}
+      - {field: "tcp_flags_ack", operator: "equals", value: true}
+      # Optional: - {field: "is_server_source_for_this_packet", operator: "equals", value: true} # DERIVED FIELD NEEDED for direction
+    stop_processing: false
+
+  - name: "Graceful TCP Termination (Both Sides)" # Relies on parser enhancement
+    output_value: "Connection Closed Gracefully (FINs from Both Sides)"
+    conditions:
+      - {field: "tcp_fin_both_sides", operator: "equals", value: true} # DERIVED FIELD NEEDED
+    stop_processing: true
+
+  - name: "TCP Reset (RST) Observed" # General RST catch-all if not Zscaler or specific refused
+    output_value: "Connection Reset (RST)"
+    conditions:
+      - {field: "tcp_flags_rst", operator: "equals", value: true}
+      - {field: "is_zscaler_ip", operator: "equals", value: false} # Avoid Zscaler identified
+      # This rule should be ordered after more specific RST rules.
+    stop_processing: false # Could be client or server initiated mid-stream.
+
+# ==============================================================================
+# Rule set for the 'traffic_type_guess' column
+# ==============================================================================
+traffic_type_rules:
+  # --- Common Application Protocols (Order by commonality or specificity) ---
+  - name: "Likely HTTPS Traffic (SNI)" # Existing, good
+    output_value: "HTTPS (TLS/SNI)"
+    conditions:
+      - {field: "destination_port", operator: "equals", value: 443}
+      - {field: "protocol", operator: "equals", value: "TCP"}
+      - {field: "sni", operator: "exists"}
+    stop_processing: true
+
+  - name: "Likely HTTPS Traffic (Port 443, TLS Handshake)" # Alternative if SNI not seen but TLS messages are
+    output_value: "HTTPS (TLS)"
+    conditions:
+      - {field: "destination_port", operator: "equals", value: 443}
+      - {field: "protocol", operator: "equals", value: "TCP"}
+      - {field: "tls_handshake_type", operator: "exists"} # e.g. ClientHello, ServerHello
+    stop_processing: true
+
+  - name: "Likely HTTP Traffic" # Existing, good
+    output_value: "HTTP"
+    conditions:
+      - {field: "destination_port", operator: "equals", value: 80}
+      - {field: "protocol", operator: "equals", value: "TCP"}
+      - {field: "http_request_method", operator: "exists"}
+    stop_processing: true
+
+  - name: "DNS Traffic" # Existing, good
+    output_value: "DNS"
+    conditions:
+      - {field: "destination_port", operator: "equals", value: 53}
+      - {field: "protocol", operator: "in", value: ["UDP", "TCP"]}
+      - {field: "dns_query_name", operator: "exists"}
+    stop_processing: true
+
+  - name: "SSH Traffic"
+    output_value: "SSH"
+    conditions:
+      - {field: "destination_port", operator: "equals", value: 22}
+      - {field: "protocol", operator: "equals", value: "TCP"}
+    stop_processing: true
+
+  - name: "FTP Control Traffic"
+    output_value: "FTP-Control"
+    conditions:
+      - {field: "destination_port", operator: "equals", value: 21}
+      - {field: "protocol", operator: "equals", value: "TCP"}
+    stop_processing: false # Don't stop, allow data channel to also be identified if in same packet somehow (unlikely)
+
+  - name: "FTP Data Traffic (Active Mode)"
+    output_value: "FTP-Data (Active)"
+    conditions:
+      - {field: "source_port", operator: "equals", value: 20} # From server's port 20
+      - {field: "protocol", operator: "equals", value: "TCP"}
+    stop_processing: true
+
+  - name: "FTP Data Traffic (Passive Mode)" # Relies on parser enhancement
+    output_value: "FTP-Data (Passive)"
+    conditions:
+      - {field: "ftp_session_mode", operator: "equals", value: "PASV"} # DERIVED FIELD NEEDED
+    stop_processing: true
+
+  # --- ICMP Message Types ---
+  - name: "ICMPv4 Echo Request (Ping)"
+    output_value: "ICMPv4 Echo Request"
+    conditions:
+      - {field: "protocol", operator: "equals", value: "ICMP"}
+      - {field: "icmp_type", operator: "equals", value: 8}
+      - {field: "icmp_code", operator: "equals", value: 0}
+    stop_processing: true
+
+  - name: "ICMPv4 Echo Reply (Ping)"
+    output_value: "ICMPv4 Echo Reply"
+    conditions:
+      - {field: "protocol", operator: "equals", value: "ICMP"}
+      - {field: "icmp_type", operator: "equals", value: 0}
+      - {field: "icmp_code", operator: "equals", value: 0}
+    stop_processing: true
+
+  - name: "ICMPv6 Echo Request (Ping)"
+    output_value: "ICMPv6 Echo Request"
+    conditions:
+      - {field: "protocol", operator: "equals", value: "ICMPv6"} # Specific to ICMPv6
+      - {field: "icmp_type", operator: "equals", value: 128}
+      - {field: "icmp_code", operator: "equals", value: 0}
+    stop_processing: true
+
+  - name: "ICMPv6 Echo Reply (Ping)"
+    output_value: "ICMPv6 Echo Reply"
+    conditions:
+      - {field: "protocol", operator: "equals", value: "ICMPv6"} # Specific to ICMPv6
+      - {field: "icmp_type", operator: "equals", value: 129}
+      - {field: "icmp_code", operator: "equals", value: 0}
+    stop_processing: true
+
+  - name: "ICMP Time Exceeded"
+    output_value_format: "{protocol} Time Exceeded (Type:{icmp_type}/Code:{icmp_code})"
+    conditions:
+      - {field: "protocol", operator: "in", value: ["ICMP", "ICMPv6"]}
+      - {field: "icmp_type", operator: "equals", value: 11}
+    stop_processing: true
+
+  - name: "Generic ICMP Traffic" # Catch-all for other ICMP if not specifically typed above
+    output_value_format: "{protocol} (Type:{icmp_type}/Code:{icmp_code})"
+    conditions:
+      - {field: "protocol", operator: "in", value: ["ICMP", "ICMPv6"]}
+    stop_processing: true
+
+
+# ==============================================================================
+# Rule set for 'security_observation'
+# ==============================================================================
+security_observation_rules:
+  - name: "Outdated TLS Version (TLS 1.0 or 1.1)"
+    output_value_format: "Outdated TLS Version ({tls_effective_version})" # Relies on normalized field
+    conditions:
+      - {field: "tls_effective_version", operator: "in", value: ["TLS 1.0", "TLS 1.1"]} # DERIVED/NORMALIZED FIELD NEEDED
+    stop_processing: false
+
+  - name: "Plain HTTP POST Request" # Existing, good observation
+    output_value: "Sensitive Data Exposure Risk (HTTP POST)"
+    conditions:
+      - {field: "http_request_method", operator: "equals", value: "POST"}
+      - {field: "destination_port", operator: "equals", value: 80} # Unencrypted HTTP
+    stop_processing: false
+
+  - name: "TLS on Non-Standard Port" # Existing, good observation
+    output_value_format: "TLS on Non-Standard Port ({destination_port})"
+    conditions:
+      - {field: "sni", operator: "exists"} # Good indicator of TLS
+      - {field: "destination_port", operator: "not_in", value: [443, 853, 993, 995, 465, 587]} # Standard TLS, DoT, Secure IMAP/POP, SMTPS
+    stop_processing: false
+
+  - name: "Excessive TCP Retransmissions (Flow)" # Relies on parser enhancement
+    output_value_format: "High TCP Retransmissions ({tcp_retransmission_rate_percent} %)" # Corrected format
+    conditions:
+      - {field: "tcp_retransmission_rate_percent", operator: "gt", value: 5.0} # DERIVED FIELD NEEDED (e.g. 5.0 for 5%)
+    stop_processing: false
+
+  - name: "High Network Latency (Flow)" # Relies on parser enhancement
+    output_value_format: "High Network RTT ({flow_avg_rtt_ms} ms)" # Corrected format
+    conditions:
+      - {field: "flow_avg_rtt_ms", operator: "gt", value: 300} # DERIVED FIELD NEEDED (e.g. 300ms)
+    stop_processing: false
+
+  - name: "Potential Untrusted TLS Certificate (Placeholder)"
     output_value: "Potential Untrusted TLS Certificate"
     conditions:
-      # This requires parser.py to extract certificate details and Zscaler to check trust.
-      # For now, let's imagine a field 'tls_certificate_is_trusted' exists and is false.
-      - field: "ssl_inspection_active" # This is a placeholder from parser.py
-        operator: "equals"             # You'd need logic in parser or here for actual detection
-        value: false # Example: if inspection IS NOT active AND SNI points to internal, maybe suspicious
-                     # Or, if a field like 'tls_cert_validation_error' exists from parser
-    # This rule is highly dependent on parser capabilities not fully shown yet.
+      - {field: "tls_cert_is_self_signed", operator: "equals", value: true} # Field from PcapRecord
+    stop_processing: false
 
-# Rule set for 'zscaler_specific_finding'
+# ==============================================================================
+# Rule set for 'zscaler_specific_finding' (Taken from existing rules.yaml)
+# ==============================================================================
 zscaler_context_rules:
   - name: "Zscaler Private Access Synthetic IP"
     output_value: "ZPA Synthetic IP Communication"
     conditions:
-      - field: "is_zpa_synthetic_ip"
-        operator: "equals"
-        value: true
+      - {field: "is_zpa_synthetic_ip", operator: "equals", value: true}
     stop_processing: true
 
-  - name: "Traffic to/from Zscaler Cloud"
+  - name: "Traffic to/from Zscaler Cloud IP"
     output_value: "Interacting with Zscaler Cloud IP"
     conditions:
-      - field: "is_zscaler_ip"
-        operator: "equals"
-        value: true
-      - field: "is_zpa_synthetic_ip" # Avoid double-tagging if already ZPA
-        operator: "equals"
-        value: false
-    stop_processing: false # Might be interesting in conjunction with other findings
+      - {field: "is_zscaler_ip", operator: "equals", value: true}
+      - {field: "is_zpa_synthetic_ip", operator: "equals", value: false} # Avoid double-tagging
+    stop_processing: false
