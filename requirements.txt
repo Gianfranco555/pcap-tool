@@ -1,4 +1,5 @@
 Cython
+PyYAML==6.0.1  # Pinning to a version with known cp311 manylinux wheels
 # Core Parsing, Analysis & Testing
 pyshark>=0.6
 pypcapkit[pyshark]==1.3.5.post17 # Fallback parser; latest as of May 2025 (as per your initial file)
