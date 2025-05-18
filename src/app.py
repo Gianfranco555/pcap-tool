@@ -1,19 +1,12 @@
-"""
-Phase 6 (Streamlit UI MVP)
-
-Covered user stories US-1 & US-3
-
-Remaining TODOs (export logic)
-"""
-
-import os
-import tempfile
-from pathlib import Path
 
 import streamlit as st
 
-from pcap_tool.parser import parse_pcap
-from heuristics.engine import HeuristicEngine
+# TODO: implement
+from src.pcap_tool.parser import parse_pcap  # noqa: F401  # TODO: implement
+from src.pcap_tool.heuristics.engine import (  # noqa: F401
+    HeuristicEngine,  # TODO: implement
+)
+
 
 st.set_page_config(page_title="PCAP Analysis Tool")
 st.title("PCAP Analysis Tool")
@@ -28,6 +21,7 @@ if uploaded_file and uploaded_file.size > 5 * 1024 * 1024 * 1024:
 
 output_area = st.empty()
 df = None
+
 analysis_attempted = False
 
 if uploaded_file and st.button("Parse & Analyze"):
@@ -77,6 +71,27 @@ st.download_button(
     file_name="report.pdf",
     disabled=True,
 )
+=======
+
+if uploaded_file and st.button("Parse & Analyze"):
+    with st.spinner("Parsing…"):
+        try:
+            # df = parse_pcap(uploaded_file)
+            # tagged_df = HeuristicEngine("rules.yaml").tag(df)
+            # df = tagged_df
+            pass
+        except Exception as exc:
+            st.error(f"Error parsing file: {exc}")
+            df = None
+
+if df is not None:
+    output_area.dataframe(df)
+else:
+    output_area.write("Analysis results will appear here.")
+
+st.download_button("Download CSV Report", b"", file_name="report.csv")
+st.download_button("Download PDF Report", b"", file_name="report.pdf")
+
 
 if __name__ == "__main__":
     print("Run this GUI with:  streamlit run src/app.py")
