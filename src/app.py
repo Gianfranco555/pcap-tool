@@ -71,7 +71,6 @@ st.download_button(
     file_name="report.pdf",
     disabled=True,
 )
-=======
 
 if uploaded_file and st.button("Parse & Analyze"):
     with st.spinner("Parsing…"):
