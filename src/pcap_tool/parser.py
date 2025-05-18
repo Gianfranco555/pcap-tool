@@ -651,6 +651,7 @@ def _ensure_path(file_like: Path | IO[bytes]) -> tuple[Path, bool]:
         return Path(file_like), False
 
     tmp = tempfile.NamedTemporaryFile(delete=False)
+
     try:
         tmp.write(file_like.read())
         tmp.flush()
@@ -663,12 +664,14 @@ def _ensure_path(file_like: Path | IO[bytes]) -> tuple[Path, bool]:
             except OSError:
                 pass
         raise
+
     tmp.close()
     return Path(tmp.name), True
 
 
 def _estimate_total_packets(path: Path) -> Optional[int]:
     """Estimate number of packets using ``capinfos -c`` if available."""
+
     commands = [["capinfos", "-c", str(path)]]
     env_path = os.environ.get("PCAP_TOOL_CAPINFOS_PATH")
     if env_path:
@@ -741,6 +744,7 @@ def iter_parsed_frames(
     on_progress: Callable[[int, Optional[int]], None] | None = None,
     max_packets: int | None = None,
 ) -> Iterator[pd.DataFrame]:
+
     """Yield parsed packets as ``pandas`` DataFrame chunks.
 
     Parameters
@@ -758,6 +762,7 @@ def iter_parsed_frames(
     max_packets:
         Maximum number of packets to process, or ``None`` for no limit.
     """
+
 
     path, cleanup = _ensure_path(file_like)
     total_estimate = _estimate_total_packets(path)
@@ -812,11 +817,13 @@ def parse_pcap_to_df(
     on_progress: Callable[[int, Optional[int]], None] | None = None,
     max_packets: int | None = None,
 ) -> pd.DataFrame:
+
     """Parse ``file_like`` and return a single concatenated ``DataFrame``.
 
     ``chunk_size`` follows the same guidance as :func:`iter_parsed_frames` and
     may be tuned based on available memory.
     """
+
 
     chunks = list(iter_parsed_frames(file_like, chunk_size=chunk_size, on_progress=on_progress, max_packets=max_packets))
     if not chunks:
