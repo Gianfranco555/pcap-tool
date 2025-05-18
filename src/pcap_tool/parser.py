@@ -761,8 +761,4 @@ if __name__ == '__main__':
     except NameError: # Should not happen with Path(__file__)
         logger.error("Could not determine path to test PCAP. Ensure __file__ is defined or provide an absolute path.")
     except Exception as e:
-<<<<<<< HEAD
         logger.error(f"An error occurred in the example usage: {e}", exc_info=True)
-=======
-        logger.error(f"An error occurred in the example usage: {e}", exc_info=True)
->>>>>>> 6de00e03ce6d99b4aac4991c58008d392709dda6

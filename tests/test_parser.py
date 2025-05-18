@@ -15,6 +15,7 @@ from scapy.packet import Packet
 from scapy.fields import ByteEnumField, FieldLenField, StrLenField
 from scapy.layers.l2 import Ether
 from scapy.layers.inet import IP, TCP, UDP, ICMP
+from scapy.layers.dns import DNS, DNSQR, DNSRR
 from scapy.layers.tls.record import TLS
 from scapy.layers.tls.handshake import TLSClientHello
 from scapy.packet import Raw
@@ -230,4 +231,98 @@ def test_non_ip_packet(tmp_path):
     assert rec["source_mac"] == "00:01:02:03:04:05"
     assert rec["destination_mac"] == "ff:ff:ff:ff:ff:ff"
     assert_new_fields_logic(rec, is_ip_packet=False)
+
+
+@pytest.fixture
+def tcp_flags_pcap(tmp_path):
+    packets = []
+    packets.append(Ether(src="aa:aa:aa:aa:aa:aa", dst="bb:bb:bb:bb:bb:bb")/
+                    IP(src="10.0.0.1", dst="10.0.0.2")/
+                    TCP(sport=1111, dport=80, flags="S"))
+    packets.append(Ether()/IP(src="10.0.0.2", dst="10.0.0.1")/
+                    TCP(sport=80, dport=1111, flags="SA"))
+    packets.append(Ether()/IP(src="10.0.0.1", dst="10.0.0.2")/
+                    TCP(sport=1111, dport=80, flags="FPU"))
+    packets.append(Ether()/IP(src="10.0.0.2", dst="10.0.0.1")/
+                    TCP(sport=80, dport=1111, flags="R"))
+    return create_pcap_file(packets, tmp_path, "tcp_flags.pcap")
+
+
+@pytest.fixture
+def dns_query_response_pcap(tmp_path):
+    query = (Ether()/IP(src="10.0.0.1", dst="8.8.8.8")/
+             UDP(sport=12345, dport=53)/
+             DNS(id=1, rd=1, qd=DNSQR(qname="example.com")))
+    response = (Ether()/IP(src="8.8.8.8", dst="10.0.0.1")/
+                UDP(sport=53, dport=12345)/
+                DNS(id=1, qr=1, aa=1, rcode=0,
+                    qd=DNSQR(qname="example.com"),
+                    an=DNSRR(rrname="example.com", rdata="93.184.216.34")))
+    return create_pcap_file([query, response], tmp_path, "dns_qr.pcap")
+
+
+def test_tcp_flag_parsing(tcp_flags_pcap):
+    df = parse_pcap(str(tcp_flags_pcap))
+    assert len(df) == 4
+    syn = df.iloc[0]
+    assert syn["tcp_flags_syn"] == True
+    assert syn["tcp_flags_ack"] == False
+    sa = df.iloc[1]
+    assert sa["tcp_flags_syn"] == True
+    assert sa["tcp_flags_ack"] == True
+    finpsh = df.iloc[2]
+    assert finpsh["tcp_flags_fin"] == True
+    assert finpsh["tcp_flags_psh"] == True
+    assert finpsh["tcp_flags_urg"] == True
+    rst = df.iloc[3]
+    assert rst["tcp_flags_rst"] in [True, None]
+
+
+def test_dns_query_and_response(dns_query_response_pcap):
+    df = parse_pcap(str(dns_query_response_pcap))
+    assert len(df) == 2
+    q = df.iloc[0]
+    assert q["dns_query_name"] == "example.com"
+    assert pd.isna(q["dns_response_code"])
+    r = df.iloc[1]
+    assert r["dns_query_name"] == "example.com"
+    assert r["dns_response_code"] == "NOERROR"
+
+
+def test_zscaler_policy_block():
+    pcap_path = Path("tests/fixtures/trigger_zscaler_rst.pcapng")
+    df = parse_pcap(str(pcap_path))
+    zs_rows = df[df["source_ip"] == "165.225.1.1"]
+    assert not zs_rows.empty
+    rec = zs_rows.iloc[0]
+    assert rec["is_zscaler_ip"] == True
+    assert "zscaler_policy_block_type" in df.columns
+
+
+def test_tls_sni_extraction():
+    pcap_path = Path("tests/fixtures/trigger_https_traffic.pcapng")
+    df = parse_pcap(str(pcap_path))
+    rec = df.iloc[0]
+    assert rec["destination_port"] == 443
+    assert rec["sni"] == "example.com"
+
+
+def test_tls_non_standard_port():
+    pcap_path = Path("tests/fixtures/trigger_non_standard_tls_port.pcapng")
+    df = parse_pcap(str(pcap_path))
+    rec = df.iloc[0]
+    assert rec["destination_port"] == 8443
+    assert rec["sni"] == "nonstd.com"
+
+
+def test_basic_l2_l3_l4_details(tcp_flags_pcap):
+    df = parse_pcap(str(tcp_flags_pcap))
+    rec = df.iloc[0]
+    assert rec["source_mac"] == "aa:aa:aa:aa:aa:aa"
+    assert rec["destination_mac"] == "bb:bb:bb:bb:bb:bb"
+    assert rec["source_ip"] == "10.0.0.1"
+    assert rec["destination_ip"] == "10.0.0.2"
+    assert rec["source_port"] == 1111
+    assert rec["destination_port"] == 80
+    assert rec["protocol"] == "TCP"
 
