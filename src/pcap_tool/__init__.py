@@ -4,6 +4,7 @@ from .parser import (
     parse_pcap_to_df,
     iter_parsed_frames,
     PcapRecord,
+    ParsedHandle,
 )
 from .pdf_report import generate_pdf_report
 
@@ -12,5 +13,6 @@ __all__ = [
     "parse_pcap_to_df",
     "iter_parsed_frames",
     "PcapRecord",
+    "ParsedHandle",
     "generate_pdf_report",
 ]
