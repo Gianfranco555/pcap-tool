@@ -81,8 +81,10 @@ else:
 csv_data = b""
 summary_csv = b""
 pdf_data = b""
+summary_pdf = b""
 download_disabled = True
 pdf_disabled = True
+summary_pdf_disabled = True
 if df is not None and not df.empty:
     csv_data = df.to_csv(index=False).encode("utf-8")
     summary_csv = summary_df.to_csv(index=False).encode("utf-8")
@@ -90,6 +92,8 @@ if df is not None and not df.empty:
     try:
         pdf_data = generate_pdf_report(df)
         pdf_disabled = False
+        summary_pdf = generate_pdf_report(summary_df)
+        summary_pdf_disabled = False
     except ImportError:
         st.warning("ReportLab not installed - PDF export disabled")
 
@@ -98,6 +102,7 @@ st.download_button(
     csv_data,
     file_name="pcap_full.csv",
     mime="text/csv",
+
     disabled=download_disabled,
 )
 st.download_button(
@@ -106,6 +111,12 @@ st.download_button(
     file_name="pcap_summary.csv",
     mime="text/csv",
     disabled=download_disabled,
+)
+st.download_button(
+    "⬇️  Download Summary PDF",
+    summary_pdf,
+    file_name="pcap_summary.pdf",
+    disabled=summary_pdf_disabled,
 )
 st.download_button(
     "Download PDF Report",
