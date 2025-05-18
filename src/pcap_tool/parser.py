@@ -123,15 +123,15 @@ def _get_pyshark_layer_attribute(layer: Any, attribute_name: str, frame_number_f
     """Helper to safely get an attribute from a pyshark layer."""
     if not hasattr(layer, attribute_name):
         return None
-    
+
     raw_value = getattr(layer, attribute_name)
-    
+
     if is_flag:
         bool_val = _safe_str_to_bool(raw_value)
         if bool_val is None and raw_value is not None: # Log if conversion failed but there was a value
              logger.warning(f"Frame {frame_number_for_log}: Could not convert flag '{attribute_name}' with value '{raw_value}' to bool. Using None.")
         return bool_val
-        
+
     # For non-flag attributes that might need int conversion (e.g. port, ttl)
     # This part can be expanded or kept simple if direct string/int from pyshark is usually fine
     # For now, just returning raw_value for non-flags, assuming further type casting where needed
@@ -215,7 +215,7 @@ def _parse_with_pyshark(file_path: str, max_packets: Optional[int]) -> Generator
             try:
                 timestamp = float(packet.sniff_timestamp)
                 frame_number = int(packet.number)
-               
+
                 source_ip, destination_ip, source_port, destination_port, protocol_l4, sni = None, None, None, None, None, None
                 source_mac, destination_mac, protocol_l3, packet_length_val = None, None, None, None
                 ip_ttl, ip_flags_df_bool, ip_id_val, dscp_val = None, None, None, None # Renamed ip_flags_df to ip_flags_df_bool
@@ -242,10 +242,10 @@ def _parse_with_pyshark(file_path: str, max_packets: Optional[int]) -> Generator
                 is_zscaler_ip_flag, is_zpa_synthetic_ip_flag = None, None # Will become False if IPs exist and don't match
                 ssl_inspection_active_flag = None
                 zscaler_policy_block_type_str = None
-               
+
                 raw_summary = str(packet.highest_layer) if hasattr(packet, 'highest_layer') else 'N/A'
                 if hasattr(packet, 'length'): packet_length_val = int(packet.length)
-                
+
                 if hasattr(packet, 'eth'):
                     eth_layer = packet.eth
                     source_mac = _get_pyshark_layer_attribute(eth_layer, 'src', frame_number)
@@ -290,14 +290,14 @@ def _parse_with_pyshark(file_path: str, max_packets: Optional[int]) -> Generator
                     # IPv6 doesn't have a direct DF flag like IPv4. Fragmentation is handled by extension headers.
                     # DSCP from tclass
                     tclass_dscp_str = _get_pyshark_layer_attribute(ip_layer_obj, 'tclass_dscp', frame_number)
-                    if tclass_dscp_str: 
+                    if tclass_dscp_str:
                         dscp_val = int(tclass_dscp_str)
                     elif hasattr(ip_layer_obj, 'tclass'):
                         tclass_hex = _get_pyshark_layer_attribute(ip_layer_obj, 'tclass', frame_number)
                         if tclass_hex:
                             try: dscp_val = int(str(tclass_hex), 16) >> 2
                             except ValueError: logger.warning(f"Frame {frame_number}: Could not parse IPv6 tclass '{tclass_hex}' for DSCP.")
-                
+
                 elif hasattr(packet, 'arp'):
                     protocol_l3 = "ARP"
                     arp_layer = packet.arp
@@ -330,12 +330,12 @@ def _parse_with_pyshark(file_path: str, max_packets: Optional[int]) -> Generator
                     tcp_flags_urg = _get_pyshark_layer_attribute(tcp_layer, 'flags_urg', frame_number, is_flag=True)
                     tcp_flags_ece = _get_pyshark_layer_attribute(tcp_layer, 'flags_ece', frame_number, is_flag=True)
                     tcp_flags_cwr = _get_pyshark_layer_attribute(tcp_layer, 'flags_cwr', frame_number, is_flag=True)
-                    
+
                     seq_str = _get_pyshark_layer_attribute(tcp_layer, 'seq', frame_number)
                     if seq_str: tcp_sequence_number = int(seq_str)
                     ack_str = _get_pyshark_layer_attribute(tcp_layer, 'ack', frame_number)
                     if ack_str: tcp_acknowledgment_number = int(ack_str)
-                    
+
                     win_val_str = _get_pyshark_layer_attribute(tcp_layer, 'window_size_value', frame_number)
                     if win_val_str: tcp_window_size = int(win_val_str)
                     else: # Fallback
@@ -350,7 +350,7 @@ def _parse_with_pyshark(file_path: str, max_packets: Optional[int]) -> Generator
                     else: # Fallback
                         mss_str = _get_pyshark_layer_attribute(tcp_layer, 'mss_val', frame_number)
                         if mss_str: tcp_options_mss = int(mss_str)
-                    
+
                     sack_perm_str = _get_pyshark_layer_attribute(tcp_layer, 'options_sack_permit', frame_number) # Note: pyshark might use 'sack_perm' or 'options_sack_permit'
                     if sack_perm_str is not None: tcp_options_sack_permitted = _safe_str_to_bool(sack_perm_str)
                     else: # Fallback for older PyShark or different field name
@@ -373,7 +373,7 @@ def _parse_with_pyshark(file_path: str, max_packets: Optional[int]) -> Generator
 
                 elif protocol_l4 == "UDP" and hasattr(packet, 'udp'):
                     transport_layer_obj = packet.udp
-                
+
                 if transport_layer_obj:
                     srcport_str = _get_pyshark_layer_attribute(transport_layer_obj, 'srcport', frame_number)
                     if srcport_str: source_port = int(srcport_str)
@@ -390,7 +390,7 @@ def _parse_with_pyshark(file_path: str, max_packets: Optional[int]) -> Generator
                         handshake_layer = tls_layer.handshake
                         hs_type_val = _get_pyshark_layer_attribute(handshake_layer, 'type', frame_number)
                         if hs_type_val: tls_handshake_type_str = TLS_HANDSHAKE_TYPE_MAP.get(str(hs_type_val), str(hs_type_val))
-                        
+
                         hs_ver_val = _get_pyshark_layer_attribute(handshake_layer, 'version', frame_number)
                         if hs_ver_val: tls_handshake_version_str = TLS_VERSION_MAP.get(str(hs_ver_val).lower(), str(hs_ver_val))
 
@@ -399,7 +399,7 @@ def _parse_with_pyshark(file_path: str, max_packets: Optional[int]) -> Generator
                             if isinstance(raw_suites, str): tls_cipher_suites_offered_list = [s.strip() for s in raw_suites.split(',')]
                             elif isinstance(raw_suites, list): tls_cipher_suites_offered_list = [str(s.show) for s in raw_suites] # .show for Field objects
                             else: tls_cipher_suites_offered_list = [str(raw_suites)]
-                        
+
                         if tls_handshake_type_str == "ServerHello" and hasattr(handshake_layer, 'ciphersuite'):
                             # ciphersuite field might be a Field object, convert to string
                             raw_cs = getattr(handshake_layer, 'ciphersuite')
@@ -409,7 +409,7 @@ def _parse_with_pyshark(file_path: str, max_packets: Optional[int]) -> Generator
                     if hasattr(tls_layer, 'record_content_type') and str(_get_pyshark_layer_attribute(tls_layer, 'record_content_type', frame_number)) == '21': # Alert
                         alert_level_val = _get_pyshark_layer_attribute(tls_layer, 'alert_message_level', frame_number)
                         if alert_level_val: tls_alert_level_str = TLS_ALERT_LEVEL_MAP.get(str(alert_level_val), str(alert_level_val))
-                        
+
                         # Try 'alert_message_description' first as it's more direct from newer tshark
                         alert_desc_val = _get_pyshark_layer_attribute(tls_layer, 'alert_message_description', frame_number)
                         if alert_desc_val: tls_alert_description_str = TLS_ALERT_DESCRIPTION_MAP.get(str(alert_desc_val), str(alert_desc_val))
@@ -428,7 +428,7 @@ def _parse_with_pyshark(file_path: str, max_packets: Optional[int]) -> Generator
                     if _get_pyshark_layer_attribute(dns_layer, 'flags_response', frame_number, is_flag=True): # Check if it's a response
                         rcode_val = _get_pyshark_layer_attribute(dns_layer, 'flags_rcode', frame_number)
                         if rcode_val: dns_response_code_str = DNS_RCODE_MAP.get(str(rcode_val), str(rcode_val))
-                        
+
                         current_response_addrs = []
                         # Handling for 'a' and 'aaaa' which can be single or list of Field objects
                         for addr_type_attr in ['a', 'aaaa']:
@@ -442,7 +442,7 @@ def _parse_with_pyshark(file_path: str, max_packets: Optional[int]) -> Generator
                                 else: # Single Field object or simple string
                                     current_response_addrs.append(str(val_addr_field.show) if hasattr(val_addr_field, 'show') else str(val_addr_field))
                         if current_response_addrs: dns_response_addresses_list = current_response_addrs
-                        
+
                         if hasattr(dns_layer, 'cname'):
                             val_cname_field = getattr(dns_layer, 'cname')
                             if isinstance(val_cname_field, list) and val_cname_field: # Take the first if it's a list
@@ -496,7 +496,7 @@ def _parse_with_pyshark(file_path: str, max_packets: Optional[int]) -> Generator
                     dhcp_layer_source = packet.dhcp
                 elif hasattr(packet, 'bootp') and hasattr(packet.bootp, 'option_dhcp_message_type'): # Check if bootp layer has DHCP options
                     dhcp_layer_source = packet.bootp
-                
+
                 if dhcp_layer_source:
                     msg_type_val = _get_pyshark_layer_attribute(dhcp_layer_source, 'option_dhcp_message_type', frame_number)
                     if msg_type_val: dhcp_message_type_str = DHCP_MESSAGE_TYPE_MAP.get(str(msg_type_val), str(msg_type_val))
@@ -505,7 +505,7 @@ def _parse_with_pyshark(file_path: str, max_packets: Optional[int]) -> Generator
                 if protocol_l4 == "GRE" and hasattr(packet, 'gre'):
                     gre_layer = packet.gre
                     gre_protocol_str = _get_pyshark_layer_attribute(gre_layer, 'proto', frame_number)
-               
+
                 if protocol_l4 == "ESP" and hasattr(packet, 'esp'):
                     esp_layer = packet.esp
                     esp_spi_str = _get_pyshark_layer_attribute(esp_layer, 'spi', frame_number)
@@ -529,7 +529,7 @@ def _parse_with_pyshark(file_path: str, max_packets: Optional[int]) -> Generator
                                      _check_ip_in_ranges(destination_ip, ZSCALER_EXAMPLE_IP_RANGES)
                 is_zpa_synthetic_ip_flag = _check_ip_in_ranges(source_ip, [ZPA_SYNTHETIC_IP_RANGE]) or \
                                            _check_ip_in_ranges(destination_ip, [ZPA_SYNTHETIC_IP_RANGE])
-                
+
                 # ssl_inspection_active: Still placeholder, requires cert parsing not yet implemented.
                 # zscaler_policy_block_type
                 if is_zscaler_ip_flag: # Only if one of the IPs is determined to be a Zscaler IP
@@ -553,11 +553,11 @@ def _parse_with_pyshark(file_path: str, max_packets: Optional[int]) -> Generator
                     source_mac=source_mac, destination_mac=destination_mac,
                     protocol_l3=protocol_l3, packet_length=packet_length_val,
                     ip_ttl=ip_ttl, ip_flags_df=ip_flags_df_bool, ip_id=ip_id_val, dscp_value=dscp_val,
-                    tcp_flags_syn=tcp_flags_syn, tcp_flags_ack=tcp_flags_ack, 
+                    tcp_flags_syn=tcp_flags_syn, tcp_flags_ack=tcp_flags_ack,
                     tcp_flags_fin=tcp_flags_fin, tcp_flags_rst=tcp_flags_rst,
                     tcp_flags_psh=tcp_flags_psh, tcp_flags_urg=tcp_flags_urg,
                     tcp_flags_ece=tcp_flags_ece, tcp_flags_cwr=tcp_flags_cwr,
-                    tcp_sequence_number=tcp_sequence_number, 
+                    tcp_sequence_number=tcp_sequence_number,
                     tcp_acknowledgment_number=tcp_acknowledgment_number,
                     tcp_window_size=tcp_window_size,
                     tcp_options_mss=tcp_options_mss,
@@ -608,7 +608,7 @@ def _parse_with_pyshark(file_path: str, max_packets: Optional[int]) -> Generator
                 logger.warning(f"Frame {packet_count}: Attribute error processing packet details: {ae}. Packet Layers: {[l.layer_name for l in packet.layers if hasattr(l, 'layer_name')]}", exc_info=False) # exc_info=False to reduce noise if frequent
             except Exception as e_pkt: # Catch-all for other unexpected errors per packet
                 logger.error(f"Frame {packet_count}: Error processing packet: {e_pkt}. Skipping.", exc_info=True) # Keep exc_info for unexpected
-            
+
             if packet_count > 0 and packet_count % 1000 == 0 :
                 logger.info(f"PyShark: Scanned {packet_count} packets...")
     except pyshark.capture.capture.TSharkCrashException as e_crash:
@@ -633,7 +633,7 @@ def parse_pcap(file_path: str, max_packets: Optional[int] = None) -> pd.DataFram
         err_msg = "Neither PyShark nor PCAPKit is installed or available. Please install at least one."
         logger.critical(err_msg)
         raise RuntimeError(err_msg)
-    
+
     records_list: List[PcapRecord] = []
     record_generator: Optional[Generator[PcapRecord, None, None]] = None
     parser_used = "None"
@@ -649,7 +649,7 @@ def parse_pcap(file_path: str, max_packets: Optional[int] = None) -> pd.DataFram
                 logger.error("PyShark failed and PCAPKit fallback is not available. Cannot parse file.")
                 raise
             logger.info("Falling back to PCAPKit...")
-            record_generator = None 
+            record_generator = None
             parser_used = "PCAPKit_Fallback_After_PyShark_Error"
         except Exception as e_pyshark_generic:
             logger.error(f"An unexpected error occurred with PyShark: {e_pyshark_generic}", exc_info=True)
@@ -659,7 +659,7 @@ def parse_pcap(file_path: str, max_packets: Optional[int] = None) -> pd.DataFram
             logger.info("Falling back to PCAPKit due to unexpected PyShark error...")
             record_generator = None
             parser_used = "PCAPKit_Fallback_After_PyShark_Error"
-    
+
     if record_generator is None and _USE_PCAPKIT: # Fallback or if PyShark was not used
         if parser_used != "PCAPKit_Fallback_After_PyShark_Error": # Avoid double logging if PyShark failed
              logger.info("PyShark not used or available. Attempting to parse with PCAPKit...")
@@ -706,15 +706,15 @@ def parse_pcap(file_path: str, max_packets: Optional[int] = None) -> pd.DataFram
 
 if __name__ == '__main__':
     logging.basicConfig(
-        level=logging.DEBUG, 
+        level=logging.DEBUG,
         format='%(asctime)s - %(name)s - %(levelname)s - [%(module)s.%(funcName)s:%(lineno)d] - %(message)s'
     )
     logger.info("Running PcapParser example from __main__ (with flag fixes)")
     try:
         current_script_path = Path(__file__).resolve()
-        project_root = current_script_path.parent.parent.parent 
-        test_pcap_file_path = project_root / "tests" / "fixtures" / "test_mixed_traffic.pcapng" 
-        
+        project_root = current_script_path.parent.parent.parent
+        test_pcap_file_path = project_root / "tests" / "fixtures" / "test_mixed_traffic.pcapng"
+
         if not test_pcap_file_path.exists():
             # Try a local path if not found in standard fixtures (e.g., during dev)
             alt_path_str = "test_mixed_traffic.pcapng" # A common name for a test file
@@ -724,20 +724,20 @@ if __name__ == '__main__':
                 logger.error(f"Test PCAP file '{alt_path_str}' also not found. Please create it or update path.")
                 logger.info(f"You can create one with: tshark -F pcapng -w {Path.cwd() / alt_path_str} -c 200")
                 exit()
-        
+
         test_pcap_file = str(test_pcap_file_path)
         logger.info(f"Attempting to parse '{test_pcap_file}' with max_packets=100...")
         df_packets = parse_pcap(test_pcap_file, max_packets=100)
-        
+
         print(f"\n--- DataFrame (first {min(len(df_packets), 20)} rows) ---")
         print(f"Total rows in DataFrame: {len(df_packets)}")
         if not df_packets.empty:
             display_cols = [
-                'frame_number', 'timestamp', 
+                'frame_number', 'timestamp',
                 'source_ip', 'destination_ip', 'protocol','protocol_l3',
                 'tcp_flags_syn', 'tcp_flags_rst', 'ip_flags_df', # To check flag parsing
                 'gre_protocol', 'esp_spi', 'quic_initial_packet_present',
-                'is_zscaler_ip', 'is_zpa_synthetic_ip', 
+                'is_zscaler_ip', 'is_zpa_synthetic_ip',
                 'ssl_inspection_active', 'zscaler_policy_block_type',
                 'raw_packet_summary'
             ]
