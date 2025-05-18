@@ -3,3 +3,4 @@ pypcapkit[pyshark]==1.3.5.post17  # latest as of May 2025:contentReference[oaici
 pandas==2.2.3                     # pre-built wheels exist on PyPI
 pytest>=7.0
 scapy>=2.5
+pyyaml ipaddress

@@ -229,4 +229,8 @@ def test_non_ip_packet(tmp_path):
     assert rec["raw_packet_summary"] is not None 
     assert rec["source_mac"] == "00:01:02:03:04:05"
     assert rec["destination_mac"] == "ff:ff:ff:ff:ff:ff"
+<<<<<<< HEAD
     assert_new_fields_logic(rec, is_ip_packet=False)
+=======
+    assert_new_fields_logic(rec, is_ip_packet=False)
+>>>>>>> 6de00e03ce6d99b4aac4991c58008d392709dda6
