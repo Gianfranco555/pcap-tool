@@ -118,3 +118,12 @@ pytest
 ### Multiprocessing Parser
 
 `iter_parsed_frames` uses multiple processes by default to speed up large PCAP files. Pass `workers=0` to disable multiprocessing; otherwise up to four processes are used.
+
+### Command-Line Parsing
+
+Parse a capture directly to DuckDB for ad-hoc SQL:
+
+```bash
+pcap-tool parse big.pcap --output duckdb://big.db
+duckdb big.db "SELECT tunnel_type, COUNT(*) FROM flows GROUP BY 1;"
+```

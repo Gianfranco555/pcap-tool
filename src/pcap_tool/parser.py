@@ -29,16 +29,15 @@ try:
     _USE_PYSHARK = True
     logger.info("PyShark library found and will be used as the primary parser.")
 except ImportError:
-    logger.warning("PyShark library not found. Attempting PCAPKit.")
+    logger.warning("PyShark library not found.")
 
-if not _USE_PYSHARK:
-    try:
-        from pcapkit import extract as pcapkit_extract
-        # ... other pcapkit imports from original ...
-        _USE_PCAPKIT = True
-        logger.info("PCAPKit library found and will be used as a fallback parser.")
-    except ImportError:
-        logger.warning("PCAPKit library not found.")
+try:
+    from pcapkit import extract as pcapkit_extract
+    # ... other pcapkit imports from original ...
+    _USE_PCAPKIT = True
+    logger.info("PCAPKit library found and will be used as a fallback parser.")
+except ImportError:
+    logger.warning("PCAPKit library not found.")
 
 if not _USE_PYSHARK and not _USE_PCAPKIT:
     logger.error("Neither PyShark nor PCAPKit is available. PCAP parsing will not function.")
@@ -961,14 +960,162 @@ def parse_pcap_to_df(
         return pd.DataFrame(columns=cols)
     return pd.concat(chunks, ignore_index=True)
 
-def parse_pcap(
-    file_path: str,
-    max_packets: Optional[int] = None,
+
+class ParsedHandle:
+    """Represents parsed flows stored in memory or on disk."""
+
+    def __init__(self, backend: str, location: Any):
+        self.backend = backend
+        self.location = location
+
+    def as_dataframe(self, limit: int | None = None) -> pd.DataFrame:
+        if self.backend == "memory":
+            df: pd.DataFrame = self.location
+            return df.head(limit) if limit is not None else df
+        if self.backend == "duckdb":
+            import duckdb
+
+            conn = duckdb.connect(self.location)
+            query = "SELECT * FROM flows"
+            if limit is not None:
+                query += f" LIMIT {limit}"
+            return conn.execute(query).df()
+        if self.backend == "arrow":
+            import pyarrow.dataset as ds
+
+            dataset = ds.dataset(self.location, format="ipc")
+            table = dataset.head(limit) if limit is not None else dataset.to_table()
+            return table.to_pandas()
+        raise ValueError(f"Unsupported backend: {self.backend}")
+
+    def count(self) -> int:
+        if self.backend == "memory":
+            return len(self.location)
+        if self.backend == "duckdb":
+            import duckdb
+
+            conn = duckdb.connect(self.location)
+            return conn.execute("SELECT COUNT(*) FROM flows").fetchone()[0]
+        if self.backend == "arrow":
+            import pyarrow.dataset as ds
+
+            dataset = ds.dataset(self.location, format="ipc")
+            return dataset.count_rows()
+        raise ValueError(f"Unsupported backend: {self.backend}")
+
+    def to_parquet(self, path: str) -> None:
+        if self.backend == "memory":
+            self.location.to_parquet(path, index=False)
+            return
+        if self.backend == "duckdb":
+            import duckdb
+
+            conn = duckdb.connect(self.location)
+            conn.execute(f"COPY flows TO '{path}' (FORMAT 'PARQUET')")
+            return
+        if self.backend == "arrow":
+            import pyarrow.dataset as ds
+            import pyarrow.parquet as pq
+
+            dataset = ds.dataset(self.location, format="ipc")
+            pq.write_table(dataset.to_table(), path)
+            return
+        raise ValueError(f"Unsupported backend: {self.backend}")
+
+def _parse_to_duckdb(
+    file_like: Path | IO[bytes],
+    db_path: str,
     *,
+    chunk_size: int,
+    on_progress: Callable[[int, Optional[int]], None] | None,
+    workers: int | None,
+):
+    import duckdb
+
+    conn = duckdb.connect(db_path)
+    first = True
+    for chunk in iter_parsed_frames(
+        file_like,
+        chunk_size=chunk_size,
+        on_progress=on_progress,
+        workers=workers,
+    ):
+        conn.register("tmp", chunk)
+        if first:
+            conn.execute("CREATE TABLE flows AS SELECT * FROM tmp")
+            first = False
+        else:
+            conn.execute("INSERT INTO flows SELECT * FROM tmp")
+        conn.unregister("tmp")
+    return ParsedHandle("duckdb", db_path)
+
+
+def _parse_to_arrow(
+    file_like: Path | IO[bytes],
+    out_dir: str,
+    *,
+    chunk_size: int,
+    on_progress: Callable[[int, Optional[int]], None] | None,
+    workers: int | None,
+):
+    import pyarrow as pa
+    import pyarrow.ipc as ipc
+
+    out_path = Path(out_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+    idx = 0
+    for chunk in iter_parsed_frames(
+        file_like,
+        chunk_size=chunk_size,
+        on_progress=on_progress,
+        workers=workers,
+    ):
+        table = pa.Table.from_pandas(chunk)
+        with ipc.new_file(out_path / f"chunk_{idx:04d}.arrow", table.schema) as w:
+            w.write(table)
+        idx += 1
+    return ParsedHandle("arrow", str(out_path))
+
+
+def parse_pcap(
+    file_like,
+    *,
+    output_uri: str | None = None,
     workers: int | None = None,
-) -> pd.DataFrame:
-    """Backward compatible wrapper returning a single DataFrame."""
-    return parse_pcap_to_df(Path(file_path), max_packets=max_packets, workers=workers)
+    chunk_size: int = 10_000,
+    on_progress: Callable[[int, Optional[int]], None] | None = None,
+) -> ParsedHandle:
+    """Parse ``file_like`` and return a handle to the parsed flows."""
+
+    if output_uri is None:
+        df = parse_pcap_to_df(
+            file_like,
+            chunk_size=chunk_size,
+            on_progress=on_progress,
+            workers=workers,
+        )
+        return ParsedHandle("memory", df)
+
+    if output_uri.startswith("duckdb://"):
+        db_path = output_uri[len("duckdb://") :]
+        return _parse_to_duckdb(
+            file_like,
+            db_path,
+            chunk_size=chunk_size,
+            on_progress=on_progress,
+            workers=workers,
+        )
+    if output_uri.startswith("arrow://"):
+        dir_path = output_uri[len("arrow://") :]
+        return _parse_to_arrow(
+            file_like,
+            dir_path,
+            chunk_size=chunk_size,
+            on_progress=on_progress,
+            workers=workers,
+        )
+
+    raise ValueError("Unsupported output_uri scheme")
 
 if __name__ == '__main__':
     logging.basicConfig(
