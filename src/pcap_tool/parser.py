@@ -1,10 +1,21 @@
 # src/pcap_tool/parser.py
 from dataclasses import dataclass, asdict
-from typing import Optional, Generator, List, Any # Added Any
+from typing import (
+    Optional,
+    Generator,
+    List,
+    Any,
+    IO,
+    Iterator,
+    Callable,
+)
 import logging
 import pandas as pd
 from pathlib import Path
 import ipaddress
+import subprocess
+import tempfile
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -628,13 +639,60 @@ def _parse_with_pcapkit(file_path: str, max_packets: Optional[int]) -> Generator
     logger.info("PCAPKit: Processing complete (stubbed).")
     return # Or raise StopIteration implicitly
 
-def parse_pcap(file_path: str, max_packets: Optional[int] = None) -> pd.DataFrame:
+
+def _ensure_path(file_like: Path | IO[bytes]) -> tuple[Path, bool]:
+    """Return a file system Path for ``file_like``.
+
+    If ``file_like`` is an open binary stream, its contents are written to a
+    temporary file which is then returned.  The second element of the tuple
+    indicates whether the caller should delete the path when finished.
+    """
+    if isinstance(file_like, (str, os.PathLike, Path)):
+        return Path(file_like), False
+
+    tmp = tempfile.NamedTemporaryFile(delete=False)
+    try:
+        tmp.write(file_like.read())
+        tmp.flush()
+    except Exception:
+        try:
+            tmp.close()
+        finally:
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                pass
+        raise
+    tmp.close()
+    return Path(tmp.name), True
+
+
+def _estimate_total_packets(path: Path) -> Optional[int]:
+    """Estimate number of packets using ``capinfos -c`` if available."""
+    commands = [["capinfos", "-c", str(path)]]
+    env_path = os.environ.get("PCAP_TOOL_CAPINFOS_PATH")
+    if env_path:
+        commands.append([env_path, "-c", str(path)])
+
+    for cmd in commands:
+        try:
+            out = subprocess.check_output(cmd, text=True)
+            for line in out.splitlines():
+                if "Number of packets" in line:
+                    return int(line.split(":")[-1].strip())
+        except (subprocess.SubprocessError, FileNotFoundError) as exc:  # pragma: no cover - best effort only
+            logger.debug("capinfos failed with %s: %s", cmd[0], exc)
+
+    return None
+
+
+def _get_record_generator(file_path: str, max_packets: Optional[int]) -> tuple[Optional[Generator[PcapRecord, None, None]], str]:
+    """Return a generator yielding :class:`PcapRecord` objects."""
     if not _USE_PYSHARK and not _USE_PCAPKIT:
         err_msg = "Neither PyShark nor PCAPKit is installed or available. Please install at least one."
         logger.critical(err_msg)
         raise RuntimeError(err_msg)
 
-    records_list: List[PcapRecord] = []
     record_generator: Optional[Generator[PcapRecord, None, None]] = None
     parser_used = "None"
 
@@ -644,7 +702,7 @@ def parse_pcap(file_path: str, max_packets: Optional[int] = None) -> pd.DataFram
         try:
             record_generator = _parse_with_pyshark(file_path, max_packets)
         except RuntimeError as e_pyshark_init:
-            logger.warning(f"PyShark primary parser failed: {e_pyshark_init}")
+            logger.warning("PyShark primary parser failed: %s", e_pyshark_init)
             if not _USE_PCAPKIT:
                 logger.error("PyShark failed and PCAPKit fallback is not available. Cannot parse file.")
                 raise
@@ -652,7 +710,7 @@ def parse_pcap(file_path: str, max_packets: Optional[int] = None) -> pd.DataFram
             record_generator = None
             parser_used = "PCAPKit_Fallback_After_PyShark_Error"
         except Exception as e_pyshark_generic:
-            logger.error(f"An unexpected error occurred with PyShark: {e_pyshark_generic}", exc_info=True)
+            logger.error("An unexpected error occurred with PyShark: %s", e_pyshark_generic, exc_info=True)
             if not _USE_PCAPKIT:
                 logger.error("PyShark failed and PCAPKit fallback is not available.")
                 raise
@@ -660,49 +718,115 @@ def parse_pcap(file_path: str, max_packets: Optional[int] = None) -> pd.DataFram
             record_generator = None
             parser_used = "PCAPKit_Fallback_After_PyShark_Error"
 
-    if record_generator is None and _USE_PCAPKIT: # Fallback or if PyShark was not used
-        if parser_used != "PCAPKit_Fallback_After_PyShark_Error": # Avoid double logging if PyShark failed
-             logger.info("PyShark not used or available. Attempting to parse with PCAPKit...")
+    if record_generator is None and _USE_PCAPKIT:
+        if parser_used != "PCAPKit_Fallback_After_PyShark_Error":
+            logger.info("PyShark not used or available. Attempting to parse with PCAPKit...")
         parser_used = "PCAPKit"
         try:
             record_generator = _parse_with_pcapkit(file_path, max_packets)
         except FileNotFoundError:
-            logger.error(f"PCAPKit error: File not found at {file_path}")
+            logger.error("PCAPKit error: File not found at %s", file_path)
             raise
         except Exception as e_pcapkit:
-            logger.error(f"PCAPKit failed to process the file: {e_pcapkit}", exc_info=True)
-            # Avoid raising here if PyShark was the primary attempt and failed, let it be handled by lack of records
-            # However, if PCAPKit was the only option, then raise
-            if not _USE_PYSHARK: # Only raise if PCAPKit was the primary and only option
-                 raise RuntimeError(f"PCAP parsing failed with {parser_used} for {file_path}.") from e_pcapkit
+            logger.error("PCAPKit failed to process the file: %s", e_pcapkit, exc_info=True)
+            if not _USE_PYSHARK:
+                raise RuntimeError(f"PCAP parsing failed with {parser_used} for {file_path}.") from e_pcapkit
 
-    if record_generator:
-        logger.info(f"Collecting records using {parser_used}...")
-        try:
-            for record_idx, record in enumerate(record_generator):
-                records_list.append(record)
-                if max_packets is not None and len(records_list) >= max_packets:
-                    break
-        except Exception as e_gen:
-            logger.error(f"Error consuming from record generator ({parser_used}): {e_gen}", exc_info=True)
+    return record_generator, parser_used
 
-        logger.info(f"Collected {len(records_list)} records using {parser_used}.")
-    else:
-        # This condition might be hit if PyShark was available but failed, and PCAPKit was also not available or failed silently.
-        if not (_USE_PYSHARK and parser_used == "PyShark") and \
-           not (_USE_PCAPKIT and parser_used.startswith("PCAPKit")): # Ensure some parser was supposed to run
-             logger.error("No valid parser (PyShark or PCAPKit) was successfully initiated or yielded records.")
-             # No raise here, let it return empty DF to be handled by caller, but log it as error.
 
-    if not records_list:
-        logger.warning(f"No records were parsed from '{file_path}' using {parser_used}. Returning an empty DataFrame.")
-        # Ensure DataFrame has all columns even if empty
-        all_field_names = [f.name for f in PcapRecord.__dataclass_fields__.values()]
-        return pd.DataFrame(columns=all_field_names)
+def iter_parsed_frames(
+    file_like: Path | IO[bytes],
+    chunk_size: int = 10_000,
+    on_progress: Callable[[int, Optional[int]], None] | None = None,
+    max_packets: int | None = None,
+) -> Iterator[pd.DataFrame]:
+    """Yield parsed packets as ``pandas`` DataFrame chunks.
 
-    df = pd.DataFrame([asdict(r) for r in records_list])
-    logger.info(f"Successfully parsed {len(df)} records into a DataFrame using {parser_used}.")
-    return df
+    Parameters
+    ----------
+    file_like:
+        Path to the PCAP file or a binary file-like object.
+    chunk_size:
+        Number of rows per yielded ``DataFrame``. The default value of
+        ``10_000`` is a general-purpose starting point. Increase the size
+        if sufficient memory is available for better performance, or
+        decrease it if memory is constrained.
+    on_progress:
+        Optional callback receiving the current processed packet count and
+        an estimated total packet count.
+    max_packets:
+        Maximum number of packets to process, or ``None`` for no limit.
+    """
+
+    path, cleanup = _ensure_path(file_like)
+    total_estimate = _estimate_total_packets(path)
+
+    record_generator, parser_used = _get_record_generator(str(path), max_packets)
+
+    if record_generator is None:
+        logger.error("No valid parser (PyShark or PCAPKit) was successfully initiated or yielded records.")
+        cols = [f.name for f in PcapRecord.__dataclass_fields__.values()]
+        yield pd.DataFrame(columns=cols)
+        if cleanup:
+            os.unlink(path)
+        return
+
+    rows: List[dict] = []
+    count = 0
+    next_callback = 100
+
+    try:
+        for record in record_generator:
+            rows.append(asdict(record))
+            count += 1
+            if on_progress and count >= next_callback:
+                on_progress(count, total_estimate)
+                next_callback = count + 100
+            if len(rows) >= chunk_size:
+                if on_progress:
+                    on_progress(count, total_estimate)
+                yield pd.DataFrame(rows)
+                rows.clear()
+            if max_packets is not None and count >= max_packets:
+                break
+    finally:
+        if cleanup:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+
+    if rows:
+        if on_progress:
+            on_progress(count, total_estimate)
+        yield pd.DataFrame(rows)
+    elif count == 0:
+        cols = [f.name for f in PcapRecord.__dataclass_fields__.values()]
+        yield pd.DataFrame(columns=cols)
+
+
+def parse_pcap_to_df(
+    file_like: Path | IO[bytes],
+    chunk_size: int = 10_000,
+    on_progress: Callable[[int, Optional[int]], None] | None = None,
+    max_packets: int | None = None,
+) -> pd.DataFrame:
+    """Parse ``file_like`` and return a single concatenated ``DataFrame``.
+
+    ``chunk_size`` follows the same guidance as :func:`iter_parsed_frames` and
+    may be tuned based on available memory.
+    """
+
+    chunks = list(iter_parsed_frames(file_like, chunk_size=chunk_size, on_progress=on_progress, max_packets=max_packets))
+    if not chunks:
+        cols = [f.name for f in PcapRecord.__dataclass_fields__.values()]
+        return pd.DataFrame(columns=cols)
+    return pd.concat(chunks, ignore_index=True)
+
+def parse_pcap(file_path: str, max_packets: Optional[int] = None) -> pd.DataFrame:
+    """Backward compatible wrapper returning a single DataFrame."""
+    return parse_pcap_to_df(Path(file_path), max_packets=max_packets)
 
 if __name__ == '__main__':
     logging.basicConfig(
