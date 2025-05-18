@@ -113,3 +113,8 @@ These changes keep the codebase production-ready while letting you run everythin
 
 ```bash
 pytest
+```
+
+### Multiprocessing Parser
+
+`iter_parsed_frames` uses multiple processes by default to speed up large PCAP files. Pass `workers=0` to disable multiprocessing; otherwise up to four processes are used.
