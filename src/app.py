@@ -102,6 +102,7 @@ st.download_button(
     csv_data,
     file_name="pcap_full.csv",
     mime="text/csv",
+
     disabled=download_disabled,
 )
 st.download_button(
