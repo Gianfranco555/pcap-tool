@@ -13,6 +13,7 @@ from pathlib import Path
 import streamlit as st
 
 from pcap_tool import parse_pcap, generate_pdf_report
+from pcap_tool.summary import generate_summary_df
 from heuristics.engine import HeuristicEngine
 
 st.set_page_config(page_title="PCAP Analysis Tool")
@@ -28,6 +29,7 @@ if uploaded_file and uploaded_file.size > 5 * 1024 * 1024 * 1024:
 
 output_area = st.empty()
 df = None
+summary_df = None
 analysis_ran = False # From Codex branch
 
 if uploaded_file and st.button("Parse & Analyze"):
@@ -51,6 +53,7 @@ if uploaded_file and st.button("Parse & Analyze"):
         rules_path = Path(__file__).resolve().parent / "heuristics" / "rules.yaml"
         engine = HeuristicEngine(str(rules_path))
         df = engine.tag_flows(parsed_df)
+        summary_df = generate_summary_df(df)
         progress.empty()
     except Exception as exc:
         progress.empty()
@@ -62,6 +65,8 @@ if uploaded_file and st.button("Parse & Analyze"):
 
 if df is not None and not df.empty:
     output_area.dataframe(df)
+    with st.expander("Preview Summary Report"):
+        st.dataframe(summary_df, use_container_width=True)
 else:
     if uploaded_file is None: # From Codex branch
         output_area.write("Upload a PCAP file to begin analysis.")
@@ -74,11 +79,13 @@ else:
         )
 
 csv_data = b""
+summary_csv = b""
 pdf_data = b""
 download_disabled = True
 pdf_disabled = True
 if df is not None and not df.empty:
     csv_data = df.to_csv(index=False).encode("utf-8")
+    summary_csv = summary_df.to_csv(index=False).encode("utf-8")
     download_disabled = False
     try:
         pdf_data = generate_pdf_report(df)
@@ -87,9 +94,17 @@ if df is not None and not df.empty:
         st.warning("ReportLab not installed - PDF export disabled")
 
 st.download_button(
-    "Download CSV Report",
+    "⬇️  Download Full CSV",
     csv_data,
-    file_name="report.csv",
+    file_name="pcap_full.csv",
+    mime="text/csv",
+    disabled=download_disabled,
+)
+st.download_button(
+    "⬇️  Download Summary CSV",
+    summary_csv,
+    file_name="pcap_summary.csv",
+    mime="text/csv",
     disabled=download_disabled,
 )
 st.download_button(
