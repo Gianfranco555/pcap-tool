@@ -1,9 +1,9 @@
 # src/pcap_tool/parser.py
 from dataclasses import dataclass, field, asdict
+from datetime import datetime
+from typing import List, Optional
 from typing import (
-    Optional,
     Generator,
-    List,
     Any,
     IO,
     Iterator,
@@ -90,6 +90,17 @@ class PcapRecord:
     tls_record_version: Optional[str] = None; tls_cipher_suites_offered: Optional[List[str]] = None
     tls_cipher_suite_selected: Optional[str] = None; tls_alert_message_description: Optional[str] = None
     tls_alert_level: Optional[str] = None
+    # ── TLS certificate metadata ─────────────────────────────────────────
+    tls_cert_subject_cn: Optional[str] = None
+    tls_cert_san_dns: Optional[List[str]] = None   # list of DNS SANs
+    tls_cert_san_ip: Optional[List[str]] = None    # list of IP SANs
+    tls_cert_issuer_cn: Optional[str] = None
+    tls_cert_serial_number: Optional[str] = None
+    tls_cert_not_before: Optional[datetime] = None
+    tls_cert_not_after: Optional[datetime] = None
+    tls_cert_sig_alg: Optional[str] = None
+    tls_cert_key_length: Optional[int] = None
+    tls_cert_is_self_signed: Optional[bool] = None
     dns_query_name: Optional[str] = None; dns_query_type: Optional[str] = None
     dns_response_code: Optional[str] = None; dns_response_addresses: Optional[List[str]] = None
     dns_response_cname_target: Optional[str] = None
