@@ -130,7 +130,7 @@ def assert_new_fields_logic(record_series, is_ip_packet=True, is_tcp_packet=Fals
             f"is_zscaler_ip: Expected False, got {record_series['is_zscaler_ip']}"
         assert record_series["is_zpa_synthetic_ip"] == False, \
             f"is_zpa_synthetic_ip: Expected False, got {record_series['is_zpa_synthetic_ip']}"
-    else: 
+    else:
         assert pd.isna(record_series["is_zscaler_ip"]), \
             f"is_zscaler_ip (non-IP): Expected NA, got {record_series['is_zscaler_ip']}"
         assert pd.isna(record_series["is_zpa_synthetic_ip"]), \
@@ -188,15 +188,15 @@ def test_happy_path_with_max_packets(happy_path_pcap):
 def test_malformed_or_no_sni_tls_packet(malformed_tls_pcap):
     df = parse_pcap(str(malformed_tls_pcap))
     assert len(df) == 3, f"Expected 3 packets, got {len(df)}"
-    
-    rec1 = df.iloc[0] 
+
+    rec1 = df.iloc[0]
     assert rec1["protocol"] == "TCP" and pd.isna(rec1["sni"])
     # CHANGE: Use '== True' for value comparison
     assert rec1["tcp_flags_syn"] == True, f"rec1 tcp_flags_syn: Expected True, got {rec1['tcp_flags_syn']}"
     assert rec1["ip_flags_df"] == True, f"rec1 ip_flags_df: Expected True, got {rec1['ip_flags_df']}" # Assuming DF set in fixture
     assert_new_fields_logic(rec1, is_tcp_packet=True)
 
-    rec2 = df.iloc[1] 
+    rec2 = df.iloc[1]
     assert rec2["protocol"] == "TCP" and pd.isna(rec2["sni"])
     assert rec2["ip_flags_df"] == True, f"rec2 ip_flags_df: Expected True, got {rec2['ip_flags_df']}" # Assuming DF set in fixture
     assert_new_fields_logic(rec2, is_tcp_packet=True)
@@ -215,7 +215,7 @@ def test_empty_pcap(tmp_path):
     assert all(col in df.columns for col in expected_cols)
 
 def test_non_ip_packet(tmp_path):
-    pkt_l2 = Ether(dst="ff:ff:ff:ff:ff:ff", src="00:01:02:03:04:05", type=0x88B5) 
+    pkt_l2 = Ether(dst="ff:ff:ff:ff:ff:ff", src="00:01:02:03:04:05", type=0x88B5)
     pkt_l2.time = 1678886600.0
     non_ip_pcap_file = create_pcap_file([pkt_l2], tmp_path, "non_ip.pcap")
     df = parse_pcap(str(non_ip_pcap_file))
@@ -225,9 +225,9 @@ def test_non_ip_packet(tmp_path):
     assert rec["frame_number"] == 1
     assert pd.isna(rec["source_ip"])
     assert pd.isna(rec["destination_ip"])
-    assert pd.isna(rec["protocol_l3"]) 
-    assert pd.isna(rec["protocol"])    
-    assert rec["raw_packet_summary"] is not None 
+    assert pd.isna(rec["protocol_l3"])
+    assert pd.isna(rec["protocol"])
+    assert rec["raw_packet_summary"] is not None
     assert rec["source_mac"] == "00:01:02:03:04:05"
     assert rec["destination_mac"] == "ff:ff:ff:ff:ff:ff"
     assert_new_fields_logic(rec, is_ip_packet=False)
@@ -325,4 +325,3 @@ def test_basic_l2_l3_l4_details(tcp_flags_pcap):
     assert rec["source_port"] == 1111
     assert rec["destination_port"] == 80
     assert rec["protocol"] == "TCP"
-

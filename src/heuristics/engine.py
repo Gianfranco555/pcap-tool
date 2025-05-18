@@ -201,12 +201,12 @@ class HeuristicEngine:
                         current_condition_eval = current_condition_eval.astype(bool)
                 except Exception as e:
                     logger.error(f"Error applying operator '{operator_key}' on field '{field}' (condition #{condition_idx+1}): {e}. Treated as False.")
-            
+
             if logic_type == "AND":
                 final_mask_for_list &= current_condition_eval
             elif logic_type == "OR":
                 final_mask_for_list |= current_condition_eval
-        
+
         return final_mask_for_list
 
 
@@ -223,7 +223,7 @@ class HeuristicEngine:
         mask_or = pd.Series([False] * len(df), index=df.index) # Default to False for OR if not present
         if conditions_or is not None:
             mask_or = self._evaluate_conditions_list(df, conditions_or, "OR")
-        
+
         # Combine AND and OR masks
         # If only one type of condition is present, the other mask is neutral
         # (all True for AND-part if conditions_and is None, all False for OR-part if conditions_any is None)
@@ -261,7 +261,7 @@ class HeuristicEngine:
                 )
                 df.loc[mask, target_column] = output_value_format
                 return
-            
+
             if not placeholders: # No placeholders, treat as literal
                 df.loc[mask, target_column] = output_value_format
                 return
@@ -308,7 +308,7 @@ class HeuristicEngine:
                 continue
 
             logger.info(f"Processing rules for target column: '{target_column}'")
-            
+
             # Get the series tracking locked rows for the current target column
             locked_rows = locked_rows_by_column[target_column]
 
@@ -318,15 +318,15 @@ class HeuristicEngine:
 
                 # Build the mask for the current rule's conditions
                 rule_match_mask = self._build_mask_for_rule(df, rule_config)
-                
+
                 # Rows to consider for this rule:
                 # 1. Must match the rule's conditions (rule_match_mask)
                 # 2. Must NOT be locked by a previous rule in this rule set (~locked_rows)
                 effective_mask = rule_match_mask & ~locked_rows
-                
+
                 if effective_mask.any():
                     self._apply_output_value(df, effective_mask, target_column, rule_config)
-                    
+
                     # If this rule has "stop_processing: true", lock these rows for this target_column
                     if rule_config.get("stop_processing") is True:
                         locked_rows.loc[effective_mask] = True # Update the locked_rows series
