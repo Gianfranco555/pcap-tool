@@ -2,6 +2,11 @@
 __pycache__/
 *.py[cod]
 .venv/
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
 # OS / editor
 .DS_Store
 # PCAPs
