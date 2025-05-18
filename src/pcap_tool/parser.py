@@ -18,6 +18,7 @@ import tempfile
 import os
 from math import ceil
 from concurrent.futures import ProcessPoolExecutor
+from collections import defaultdict, deque
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,10 @@ ZSCALER_EXAMPLE_IP_RANGES = [
     ipaddress.ip_network("165.225.0.0/17"),
 ]
 ZPA_SYNTHETIC_IP_RANGE = ipaddress.ip_network("100.64.0.0/10")
+
+# --- Lightweight TCP heuristic state ---
+_TCP_FLOW_HISTORY: dict[tuple[str, int, str, int], deque] = defaultdict(deque)
+_TCP_FLOW_HISTORY_MAX = 64
 
 @dataclass
 class PcapRecord:
@@ -205,6 +210,68 @@ def _check_ip_in_ranges(ip_str: Optional[str], ranges: List[ipaddress.IPv4Networ
         logger.debug(f"Invalid IP address string for range check: {ip_str}")
         return False
     return False
+
+
+def _flow_history_key(
+    src_ip: Optional[str], src_port: Optional[int], dst_ip: Optional[str], dst_port: Optional[int]
+) -> tuple[str, int, str, int]:
+    """Create a normalized flow key for the heuristic cache."""
+    return (
+        src_ip or "",
+        src_port or -1,
+        dst_ip or "",
+        dst_port or -1,
+    )
+
+
+def _update_flow_history(
+    key: tuple[str, int, str, int],
+    seq: Optional[int],
+    ack: Optional[int],
+    win: Optional[int],
+    length: int,
+) -> None:
+    """Store packet values for a flow, trimming old history."""
+    hist = _TCP_FLOW_HISTORY[key]
+    hist.append({"seq": seq, "ack": ack, "win": win, "len": length})
+    if len(hist) > _TCP_FLOW_HISTORY_MAX:
+        hist.popleft()
+
+
+def _heuristic_tcp_flags(
+    key: tuple[str, int, str, int],
+    seq: Optional[int],
+    ack: Optional[int],
+    win: Optional[int],
+    length: int,
+) -> dict[str, bool]:
+    """Infer basic TCP analysis flags without TShark's analysis layer."""
+    hist = _TCP_FLOW_HISTORY[key]
+    seqs = {h["seq"] for h in hist if h.get("seq") is not None}
+
+    flags = {
+        "retransmission": False,
+        "duplicate_ack": False,
+        "out_of_order": False,
+        "zero_window": False,
+    }
+
+    if seq is not None and seq in seqs:
+        flags["retransmission"] = True
+
+    if hist:
+        last = hist[-1]
+        if ack is not None and ack == last.get("ack") and length == 0:
+            flags["duplicate_ack"] = True
+        if seq is not None:
+            expected = (last.get("seq") or 0) + (last.get("len") or 0)
+            if seq < expected and seq not in seqs:
+                flags["out_of_order"] = True
+        if win == 0 and last.get("win") not in (None, 0):
+            flags["zero_window"] = True
+
+    _update_flow_history(key, seq, ack, win, length)
+    return flags
 
 def _parse_with_pyshark(
     file_path: str,
@@ -409,6 +476,10 @@ def _parse_with_pyshark(
                         wscale_mult_str = _get_pyshark_layer_attribute(tcp_layer, 'window_scale_multiplier', frame_number)
                         if wscale_mult_str: tcp_options_window_scale = int(wscale_mult_str)
 
+                    payload_len_str = _get_pyshark_layer_attribute(tcp_layer, 'len', frame_number)
+                    payload_len_int = int(payload_len_str) if payload_len_str else 0
+                    flow_key = _flow_history_key(source_ip, source_port, destination_ip, destination_port)
+
 
                     if tcp_layer and hasattr(tcp_layer, 'analysis'):
                         tcp_analysis_layer = tcp_layer.analysis
@@ -443,6 +514,29 @@ def _parse_with_pyshark(
                             tcp_analysis_window_flags.append('zero_window_probe_ack')
                         if getattr(tcp_analysis_layer, 'window_update', None) is not None:
                             tcp_analysis_window_flags.append('window_update')
+                        _update_flow_history(
+                            flow_key,
+                            tcp_sequence_number,
+                            tcp_acknowledgment_number,
+                            adv_window_val,
+                            payload_len_int,
+                        )
+                    else:
+                        h_flags = _heuristic_tcp_flags(
+                            flow_key,
+                            tcp_sequence_number,
+                            tcp_acknowledgment_number,
+                            adv_window_val,
+                            payload_len_int,
+                        )
+                        if h_flags['retransmission']:
+                            tcp_analysis_retransmission_flags.append('heuristic_retransmission')
+                        if h_flags['duplicate_ack']:
+                            tcp_analysis_duplicate_ack_flags.append('heuristic_duplicate_ack')
+                        if h_flags['out_of_order']:
+                            tcp_analysis_out_of_order_flags.append('heuristic_out_of_order')
+                        if h_flags['zero_window']:
+                            tcp_analysis_window_flags.append('heuristic_zero_window')
 
                 elif protocol_l4 == "UDP" and hasattr(packet, 'udp'):
                     transport_layer_obj = packet.udp
