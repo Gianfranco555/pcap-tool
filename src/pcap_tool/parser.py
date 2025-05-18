@@ -322,6 +322,48 @@ def _parse_with_pyshark(
         logger.error(f"PyShark error opening/initializing pcap file {file_path}: {e_init}")
         raise RuntimeError(f"PyShark failed to open or initialize {file_path}.") from e_init
 
+    def _extract_certificate_metadata(pkt) -> dict:
+        """Return TLS certificate details from ``pkt`` if present."""
+        if not hasattr(pkt, "tls"):
+            return {}
+        tls_obj = pkt.tls
+        cert = getattr(tls_obj, "handshake_certificate", None)
+        if cert is None:
+            cert = getattr(tls_obj, "handshake__certificate", None)
+        if cert is None:
+            return {}
+        leaf = cert[0] if isinstance(cert, list) else cert
+        meta: dict[str, Any] = {}
+        meta["tls_cert_subject_cn"] = getattr(leaf, "x509sat_commonName", None)
+        meta["tls_cert_san_dns"] = getattr(leaf, "get_multiple_fields", lambda *_: None)("x509sat_dnsName")
+        meta["tls_cert_san_ip"] = getattr(leaf, "get_multiple_fields", lambda *_: None)("x509sat_ipAddress")
+        meta["tls_cert_issuer_cn"] = getattr(leaf, "x509sat_issuer_commonName", None)
+        meta["tls_cert_serial_number"] = getattr(leaf, "x509af_serial_number", None)
+        nb = getattr(leaf, "x509af_validity_not_before", None)
+        na = getattr(leaf, "x509af_validity_not_after", None)
+        if nb:
+            try:
+                meta["tls_cert_not_before"] = datetime.strptime(str(nb), "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                meta["tls_cert_not_before"] = None
+        if na:
+            try:
+                meta["tls_cert_not_after"] = datetime.strptime(str(na), "%Y-%m-%d %H:%M:%S")
+            except Exception:
+                meta["tls_cert_not_after"] = None
+        meta["tls_cert_sig_alg"] = getattr(leaf, "x509af_signature_algo", None)
+        key_len = getattr(leaf, "x509af_public_key_length", None)
+        if key_len is not None:
+            try:
+                meta["tls_cert_key_length"] = int(key_len)
+            except Exception:
+                meta["tls_cert_key_length"] = None
+        subj_cn = meta.get("tls_cert_subject_cn")
+        issuer_cn = meta.get("tls_cert_issuer_cn")
+        if subj_cn is not None and issuer_cn is not None:
+            meta["tls_cert_is_self_signed"] = subj_cn == issuer_cn
+        return meta
+
     packet_count = 0
     try:
         for packet in cap:
@@ -492,19 +534,26 @@ def _parse_with_pyshark(
                     flow_key = _flow_history_key(source_ip, source_port, destination_ip, destination_port)
 
 
-                    if tcp_layer and hasattr(tcp_layer, 'analysis'):
-                        tcp_analysis_layer = tcp_layer.analysis
+                    if tcp_layer:
+                        analysis_layer = getattr(tcp_layer, 'analysis', None)
 
-                        if getattr(tcp_analysis_layer, 'retransmission', None) is not None:
+                        def _get_analysis_attr(attr: str) -> Any:
+                            if analysis_layer and hasattr(analysis_layer, attr):
+                                return getattr(analysis_layer, attr)
+                            return getattr(tcp_layer, f'analysis_{attr}', None)
+
+                        if _get_analysis_attr('retransmission') is not None:
                             tcp_analysis_retransmission_flags.append('retransmission')
-                        if getattr(tcp_analysis_layer, 'fast_retransmission', None) is not None:
+                        if _get_analysis_attr('fast_retransmission') is not None:
                             tcp_analysis_retransmission_flags.append('fast_retransmission')
-                        if getattr(tcp_analysis_layer, 'spurious_retransmission', None) is not None:
+                            if dup_ack_num_val is None:
+                                dup_ack_num_val = 3
+                        if _get_analysis_attr('spurious_retransmission') is not None:
                             tcp_analysis_retransmission_flags.append('spurious_retransmission')
 
-                        if getattr(tcp_analysis_layer, 'duplicate_ack', None) is not None:
+                        if _get_analysis_attr('duplicate_ack') is not None:
                             tcp_analysis_duplicate_ack_flags.append('duplicate_ack')
-                        dup_num_raw = getattr(tcp_analysis_layer, 'duplicate_ack_num', None)
+                        dup_num_raw = _get_analysis_attr('duplicate_ack_num')
                         if dup_num_raw is not None:
                             try:
                                 dup_ack_num_val = int(dup_num_raw)
@@ -512,19 +561,24 @@ def _parse_with_pyshark(
                             except Exception:
                                 tcp_analysis_duplicate_ack_flags.append('duplicate_ack_num')
 
-                        if getattr(tcp_analysis_layer, 'out_of_order', None) is not None:
+                        if _get_analysis_attr('out_of_order') is not None:
                             tcp_analysis_out_of_order_flags.append('out_of_order')
-                        if getattr(tcp_analysis_layer, 'lost_segment', None) is not None:
+                        if _get_analysis_attr('lost_segment') is not None:
                             tcp_analysis_out_of_order_flags.append('lost_segment')
 
-                        if getattr(tcp_analysis_layer, 'zero_window', None) is not None:
+                        if _get_analysis_attr('zero_window') is not None:
                             tcp_analysis_window_flags.append('zero_window')
-                        if getattr(tcp_analysis_layer, 'zero_window_probe', None) is not None:
+                        if _get_analysis_attr('zero_window_probe') is not None:
+                            if 'zero_window' not in tcp_analysis_window_flags:
+                                tcp_analysis_window_flags.append('zero_window')
                             tcp_analysis_window_flags.append('zero_window_probe')
-                        if getattr(tcp_analysis_layer, 'zero_window_probe_ack', None) is not None:
+                        if _get_analysis_attr('zero_window_probe_ack') is not None:
+                            if 'zero_window' not in tcp_analysis_window_flags:
+                                tcp_analysis_window_flags.append('zero_window')
                             tcp_analysis_window_flags.append('zero_window_probe_ack')
-                        if getattr(tcp_analysis_layer, 'window_update', None) is not None:
+                        if _get_analysis_attr('window_update') is not None:
                             tcp_analysis_window_flags.append('window_update')
+
                         _update_flow_history(
                             flow_key,
                             tcp_sequence_number,
@@ -586,15 +640,24 @@ def _parse_with_pyshark(
 
                     if hasattr(tls_layer, 'record_content_type') and str(_get_pyshark_layer_attribute(tls_layer, 'record_content_type', frame_number)) == '21': # Alert
                         alert_level_val = _get_pyshark_layer_attribute(tls_layer, 'alert_message_level', frame_number)
-                        if alert_level_val: tls_alert_level_str = TLS_ALERT_LEVEL_MAP.get(str(alert_level_val), str(alert_level_val))
+                        if alert_level_val:
+                            tls_alert_level_str = TLS_ALERT_LEVEL_MAP.get(str(alert_level_val), str(alert_level_val))
 
                         # Try 'alert_message_description' first as it's more direct from newer tshark
                         alert_desc_val = _get_pyshark_layer_attribute(tls_layer, 'alert_message_description', frame_number)
-                        if alert_desc_val: tls_alert_description_str = TLS_ALERT_DESCRIPTION_MAP.get(str(alert_desc_val), str(alert_desc_val))
-                        else: # Fallback to 'alert_message' if description not found
+                        if alert_desc_val:
+                            tls_alert_description_str = TLS_ALERT_DESCRIPTION_MAP.get(
+                                str(alert_desc_val), str(alert_desc_val)
+                            )
+                        else:  # Fallback to 'alert_message' if description not found
                             alert_msg_val = _get_pyshark_layer_attribute(tls_layer, 'alert_message', frame_number)
-                            if alert_msg_val: tls_alert_description_str = TLS_ALERT_DESCRIPTION_MAP.get(str(alert_msg_val), str(alert_msg_val)) # Use same map
-                            else: tls_alert_description_str = "Unknown Alert"
+                            if alert_msg_val:
+                                tls_alert_description_str = TLS_ALERT_DESCRIPTION_MAP.get(
+                                    str(alert_msg_val), str(alert_msg_val)
+                                )  # Use same map
+                            else:
+                                tls_alert_description_str = "Unknown Alert"
+
 
 
                 if hasattr(packet, 'dns'):
@@ -723,6 +786,8 @@ def _parse_with_pyshark(
                         zscaler_policy_block_type_str = f"TLS_FATAL_ALERT_FROM_ZSCALER_{safe_alert_desc[:30]}"
 
 
+                cert_meta = _extract_certificate_metadata(packet)
+
                 yield PcapRecord(
                     frame_number=frame_number, timestamp=timestamp,
                     source_ip=source_ip, destination_ip=destination_ip,
@@ -781,7 +846,8 @@ def _parse_with_pyshark(
                     is_zscaler_ip=is_zscaler_ip_flag,
                     is_zpa_synthetic_ip=is_zpa_synthetic_ip_flag,
                     ssl_inspection_active=ssl_inspection_active_flag,
-                    zscaler_policy_block_type=zscaler_policy_block_type_str
+                    zscaler_policy_block_type=zscaler_policy_block_type_str,
+                    **cert_meta,
                 )
                 generated_records += 1
             except AttributeError as ae: # This should be less common with _get_pyshark_layer_attribute
