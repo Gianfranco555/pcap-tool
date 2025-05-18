@@ -410,18 +410,17 @@ def _parse_with_pyshark(
                         if wscale_mult_str: tcp_options_window_scale = int(wscale_mult_str)
 
 
-                    if hasattr(tcp_layer, 'analysis'):
+                    if tcp_layer and hasattr(tcp_layer, 'analysis'):
                         tcp_analysis_layer = tcp_layer.analysis
-                        for flag in [
-                            'retransmission',
-                            'fast_retransmission',
-                            'spurious_retransmission',
-                            'lost_retransmission',
-                        ]:
-                            if hasattr(tcp_analysis_layer, flag):
-                                tcp_analysis_retransmission_flags.append(flag)
 
-                        if hasattr(tcp_analysis_layer, 'duplicate_ack'):
+                        if getattr(tcp_analysis_layer, 'retransmission', None) is not None:
+                            tcp_analysis_retransmission_flags.append('retransmission')
+                        if getattr(tcp_analysis_layer, 'fast_retransmission', None) is not None:
+                            tcp_analysis_retransmission_flags.append('fast_retransmission')
+                        if getattr(tcp_analysis_layer, 'spurious_retransmission', None) is not None:
+                            tcp_analysis_retransmission_flags.append('spurious_retransmission')
+
+                        if getattr(tcp_analysis_layer, 'duplicate_ack', None) is not None:
                             tcp_analysis_duplicate_ack_flags.append('duplicate_ack')
                         dup_num_raw = getattr(tcp_analysis_layer, 'duplicate_ack_num', None)
                         if dup_num_raw is not None:
@@ -430,21 +429,20 @@ def _parse_with_pyshark(
                                 tcp_analysis_duplicate_ack_flags.append(f'duplicate_ack_num:{dup_ack_num_val}')
                             except Exception:
                                 tcp_analysis_duplicate_ack_flags.append('duplicate_ack_num')
-                        if hasattr(tcp_analysis_layer, 'duplicate_ack_frame'):
-                            tcp_analysis_duplicate_ack_flags.append('duplicate_ack_frame')
 
-                        if hasattr(tcp_analysis_layer, 'out_of_order'):
+                        if getattr(tcp_analysis_layer, 'out_of_order', None) is not None:
                             tcp_analysis_out_of_order_flags.append('out_of_order')
+                        if getattr(tcp_analysis_layer, 'lost_segment', None) is not None:
+                            tcp_analysis_out_of_order_flags.append('lost_segment')
 
-                        for flag in [
-                            'zero_window',
-                            'zero_window_probe',
-                            'zero_window_probe_ack',
-                            'window_full',
-                            'window_update',
-                        ]:
-                            if hasattr(tcp_analysis_layer, flag):
-                                tcp_analysis_window_flags.append(flag)
+                        if getattr(tcp_analysis_layer, 'zero_window', None) is not None:
+                            tcp_analysis_window_flags.append('zero_window')
+                        if getattr(tcp_analysis_layer, 'zero_window_probe', None) is not None:
+                            tcp_analysis_window_flags.append('zero_window_probe')
+                        if getattr(tcp_analysis_layer, 'zero_window_probe_ack', None) is not None:
+                            tcp_analysis_window_flags.append('zero_window_probe_ack')
+                        if getattr(tcp_analysis_layer, 'window_update', None) is not None:
+                            tcp_analysis_window_flags.append('window_update')
 
                 elif protocol_l4 == "UDP" and hasattr(packet, 'udp'):
                     transport_layer_obj = packet.udp
