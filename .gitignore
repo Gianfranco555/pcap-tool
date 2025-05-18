@@ -8,3 +8,16 @@ __pycache__/
 *.pcap
 *.pcapng
 !tests/fixtures/*.pcapng
+# IDE / Editor specific
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test output files (if they are consistently named or patterned)
+# For now, let's assume you manually avoid adding the Desktop pcap files.
+# If they were in a specific test output directory, you'd add that.
+# e.g. tests/output/
+
+# OS specific
+Thumbs.db
