@@ -1,5 +1,5 @@
 # src/pcap_tool/parser.py
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, field, asdict
 from typing import (
     Optional,
     Generator,
@@ -74,9 +74,13 @@ class PcapRecord:
     tcp_sequence_number: Optional[int] = None; tcp_acknowledgment_number: Optional[int] = None
     tcp_window_size: Optional[int] = None; tcp_options_mss: Optional[int] = None
     tcp_options_sack_permitted: Optional[bool] = None; tcp_options_window_scale: Optional[int] = None
-    tcp_stream_index: Optional[int] = None; tcp_analysis_retransmission: Optional[bool] = None
-    tcp_analysis_duplicate_ack: Optional[bool] = None; tcp_analysis_out_of_order: Optional[bool] = None
-    tcp_analysis_zero_window: Optional[bool] = None
+    tcp_stream_index: Optional[int] = None
+    tcp_analysis_retransmission_flags: list[str] = field(default_factory=list)
+    tcp_analysis_duplicate_ack_flags: list[str] = field(default_factory=list)
+    tcp_analysis_out_of_order_flags: list[str] = field(default_factory=list)
+    tcp_analysis_window_flags: list[str] = field(default_factory=list)
+    dup_ack_num: Optional[int] = None
+    adv_window: Optional[int] = None
     tls_handshake_type: Optional[str] = None; tls_handshake_version: Optional[str] = None
     tls_record_version: Optional[str] = None; tls_cipher_suites_offered: Optional[List[str]] = None
     tls_cipher_suite_selected: Optional[str] = None; tls_alert_message_description: Optional[str] = None
@@ -259,8 +263,11 @@ def _parse_with_pyshark(
                 tcp_sequence_number, tcp_acknowledgment_number, tcp_window_size = None, None, None
                 tcp_options_mss, tcp_options_sack_permitted, tcp_options_window_scale = None, None, None
                 tcp_stream_index = None
-                tcp_analysis_retransmission, tcp_analysis_duplicate_ack = None, None
-                tcp_analysis_out_of_order, tcp_analysis_zero_window = None, None
+                tcp_analysis_retransmission_flags = []
+                tcp_analysis_duplicate_ack_flags = []
+                tcp_analysis_out_of_order_flags = []
+                tcp_analysis_window_flags = []
+                dup_ack_num_val, adv_window_val = None, None
                 tls_handshake_type_str, tls_handshake_version_str, tls_record_version_str = None, None, None
                 tls_cipher_suites_offered_list, tls_cipher_suite_selected_str = None, None
                 tls_alert_description_str, tls_alert_level_str = None, None
@@ -372,10 +379,14 @@ def _parse_with_pyshark(
                     if ack_str: tcp_acknowledgment_number = int(ack_str)
 
                     win_val_str = _get_pyshark_layer_attribute(tcp_layer, 'window_size_value', frame_number)
-                    if win_val_str: tcp_window_size = int(win_val_str)
+                    if win_val_str:
+                        tcp_window_size = int(win_val_str)
+                        adv_window_val = int(win_val_str)
                     else: # Fallback
                         win_str = _get_pyshark_layer_attribute(tcp_layer, 'window_size', frame_number)
-                        if win_str: tcp_window_size = int(win_str)
+                        if win_str:
+                            tcp_window_size = int(win_str)
+                            adv_window_val = int(win_str)
 
                     stream_str = _get_pyshark_layer_attribute(tcp_layer, 'stream', frame_number)
                     if stream_str: tcp_stream_index = int(stream_str)
@@ -401,10 +412,39 @@ def _parse_with_pyshark(
 
                     if hasattr(tcp_layer, 'analysis'):
                         tcp_analysis_layer = tcp_layer.analysis
-                        tcp_analysis_retransmission = hasattr(tcp_analysis_layer, 'retransmission')
-                        tcp_analysis_duplicate_ack = hasattr(tcp_analysis_layer, 'duplicate_ack')
-                        tcp_analysis_out_of_order = hasattr(tcp_analysis_layer, 'out_of_order')
-                        tcp_analysis_zero_window = hasattr(tcp_analysis_layer, 'zero_window')
+                        for flag in [
+                            'retransmission',
+                            'fast_retransmission',
+                            'spurious_retransmission',
+                            'lost_retransmission',
+                        ]:
+                            if hasattr(tcp_analysis_layer, flag):
+                                tcp_analysis_retransmission_flags.append(flag)
+
+                        if hasattr(tcp_analysis_layer, 'duplicate_ack'):
+                            tcp_analysis_duplicate_ack_flags.append('duplicate_ack')
+                        dup_num_raw = getattr(tcp_analysis_layer, 'duplicate_ack_num', None)
+                        if dup_num_raw is not None:
+                            try:
+                                dup_ack_num_val = int(dup_num_raw)
+                                tcp_analysis_duplicate_ack_flags.append(f'duplicate_ack_num:{dup_ack_num_val}')
+                            except Exception:
+                                tcp_analysis_duplicate_ack_flags.append('duplicate_ack_num')
+                        if hasattr(tcp_analysis_layer, 'duplicate_ack_frame'):
+                            tcp_analysis_duplicate_ack_flags.append('duplicate_ack_frame')
+
+                        if hasattr(tcp_analysis_layer, 'out_of_order'):
+                            tcp_analysis_out_of_order_flags.append('out_of_order')
+
+                        for flag in [
+                            'zero_window',
+                            'zero_window_probe',
+                            'zero_window_probe_ack',
+                            'window_full',
+                            'window_update',
+                        ]:
+                            if hasattr(tcp_analysis_layer, flag):
+                                tcp_analysis_window_flags.append(flag)
 
                 elif protocol_l4 == "UDP" and hasattr(packet, 'udp'):
                     transport_layer_obj = packet.udp
@@ -599,10 +639,12 @@ def _parse_with_pyshark(
                     tcp_options_sack_permitted=tcp_options_sack_permitted,
                     tcp_options_window_scale=tcp_options_window_scale,
                     tcp_stream_index=tcp_stream_index,
-                    tcp_analysis_retransmission=tcp_analysis_retransmission,
-                    tcp_analysis_duplicate_ack=tcp_analysis_duplicate_ack,
-                    tcp_analysis_out_of_order=tcp_analysis_out_of_order,
-                    tcp_analysis_zero_window=tcp_analysis_zero_window,
+                    tcp_analysis_retransmission_flags=tcp_analysis_retransmission_flags,
+                    tcp_analysis_duplicate_ack_flags=tcp_analysis_duplicate_ack_flags,
+                    tcp_analysis_out_of_order_flags=tcp_analysis_out_of_order_flags,
+                    tcp_analysis_window_flags=tcp_analysis_window_flags,
+                    dup_ack_num=dup_ack_num_val,
+                    adv_window=adv_window_val,
                     tls_handshake_type=tls_handshake_type_str,
                     tls_handshake_version=tls_handshake_version_str,
                     tls_record_version=tls_record_version_str,
