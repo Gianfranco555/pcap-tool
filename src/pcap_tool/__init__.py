@@ -7,6 +7,7 @@ from .parser import (
     ParsedHandle,
 )
 from .pdf_report import generate_pdf_report
+from .summary import generate_summary_df
 
 __all__ = [
     "parse_pcap",
@@ -15,4 +16,5 @@ __all__ = [
     "PcapRecord",
     "ParsedHandle",
     "generate_pdf_report",
+    "generate_summary_df",
 ]
