@@ -337,3 +337,11 @@ def test_basic_l2_l3_l4_details(tcp_flags_pcap):
     assert rec["source_port"] == 1111
     assert rec["destination_port"] == 80
     assert rec["protocol"] == "TCP"
+
+
+def test_safe_int_parses_commas():
+    from pcap_tool.parser import _safe_int
+
+    assert _safe_int("1,234") == 1234
+    assert _safe_int(None) is None
+    assert _safe_int("bad") is None

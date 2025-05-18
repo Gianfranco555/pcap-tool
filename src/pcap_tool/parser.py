@@ -151,6 +151,22 @@ def _safe_str_to_bool(value: Any) -> Optional[bool]:
         return False
     return None # Return None if conversion is not straightforward
 
+def _safe_int(value: Any) -> Optional[int]:
+    """Safely convert numbers that may contain commas to ``int``.
+
+    Parameters
+    ----------
+    value:
+        The value to convert to ``int``. Strings containing comma
+        thousands separators are supported.  ``None`` or values that
+        cannot be parsed return ``None`` instead of raising an
+        exception.
+    """
+    try:
+        return int(str(value).replace(",", ""))
+    except (TypeError, ValueError):
+        return None
+
 def _get_pyshark_layer_attribute(layer: Any, attribute_name: str, frame_number_for_log: int, is_flag: bool = False) -> Any:
     """Helper to safely get an attribute from a pyshark layer."""
     if not hasattr(layer, attribute_name):
@@ -354,10 +370,7 @@ def _parse_with_pyshark(
         meta["tls_cert_sig_alg"] = getattr(leaf, "x509af_signature_algo", None)
         key_len = getattr(leaf, "x509af_public_key_length", None)
         if key_len is not None:
-            try:
-                meta["tls_cert_key_length"] = int(key_len)
-            except Exception:
-                meta["tls_cert_key_length"] = None
+            meta["tls_cert_key_length"] = _safe_int(key_len)
         subj_cn = meta.get("tls_cert_subject_cn")
         issuer_cn = meta.get("tls_cert_issuer_cn")
         if subj_cn is not None and issuer_cn is not None:
@@ -373,7 +386,7 @@ def _parse_with_pyshark(
             packet_count += 1
             try:
                 timestamp = float(packet.sniff_timestamp)
-                frame_number = int(packet.number)
+                frame_number = _safe_int(packet.number) or 0
 
                 source_ip, destination_ip, source_port, destination_port, protocol_l4, sni = None, None, None, None, None, None
                 source_mac, destination_mac, protocol_l3, packet_length_val = None, None, None, None
@@ -406,7 +419,8 @@ def _parse_with_pyshark(
                 zscaler_policy_block_type_str = None
 
                 raw_summary = str(packet.highest_layer) if hasattr(packet, 'highest_layer') else 'N/A'
-                if hasattr(packet, 'length'): packet_length_val = int(packet.length)
+                if hasattr(packet, 'length'):
+                    packet_length_val = _safe_int(packet.length)
 
                 if hasattr(packet, 'eth'):
                     eth_layer = packet.eth
@@ -418,7 +432,7 @@ def _parse_with_pyshark(
                     protocol_l3 = "IPv4"; ip_layer_obj = packet.ip
                     proto_num_str = _get_pyshark_layer_attribute(ip_layer_obj, 'proto', frame_number)
                     if proto_num_str is not None:
-                        protocol_num = int(proto_num_str)
+                        protocol_num = _safe_int(proto_num_str)
                         if protocol_num == 1: protocol_l4 = "ICMP"
                         elif protocol_num == 6: protocol_l4 = "TCP"
                         elif protocol_num == 17: protocol_l4 = "UDP"
@@ -428,17 +442,19 @@ def _parse_with_pyshark(
                     source_ip = _get_pyshark_layer_attribute(ip_layer_obj, 'src', frame_number)
                     destination_ip = _get_pyshark_layer_attribute(ip_layer_obj, 'dst', frame_number)
                     ttl_str = _get_pyshark_layer_attribute(ip_layer_obj, 'ttl', frame_number)
-                    if ttl_str: ip_ttl = int(ttl_str)
+                    if ttl_str:
+                        ip_ttl = _safe_int(ttl_str)
                     ip_flags_df_bool = _get_pyshark_layer_attribute(ip_layer_obj, 'flags_df', frame_number, is_flag=True)
                     ip_id_val = _get_pyshark_layer_attribute(ip_layer_obj, 'id', frame_number)
                     dscp_str = _get_pyshark_layer_attribute(ip_layer_obj, 'dsfield_dscp', frame_number)
-                    if dscp_str: dscp_val = int(dscp_str)
+                    if dscp_str:
+                        dscp_val = _safe_int(dscp_str)
 
                 elif hasattr(packet, 'ipv6'):
                     protocol_l3 = "IPv6"; ip_layer_obj = packet.ipv6
                     proto_num_str = _get_pyshark_layer_attribute(ip_layer_obj, 'nxt', frame_number)
                     if proto_num_str is not None:
-                        protocol_num = int(proto_num_str)
+                        protocol_num = _safe_int(proto_num_str)
                         if protocol_num == 6: protocol_l4 = "TCP"
                         elif protocol_num == 17: protocol_l4 = "UDP"
                         elif protocol_num == 58: protocol_l4 = "ICMPv6"
@@ -448,12 +464,13 @@ def _parse_with_pyshark(
                     source_ip = _get_pyshark_layer_attribute(ip_layer_obj, 'src', frame_number)
                     destination_ip = _get_pyshark_layer_attribute(ip_layer_obj, 'dst', frame_number)
                     hlim_str = _get_pyshark_layer_attribute(ip_layer_obj, 'hlim', frame_number)
-                    if hlim_str: ip_ttl = int(hlim_str)
+                    if hlim_str:
+                        ip_ttl = _safe_int(hlim_str)
                     # IPv6 doesn't have a direct DF flag like IPv4. Fragmentation is handled by extension headers.
                     # DSCP from tclass
                     tclass_dscp_str = _get_pyshark_layer_attribute(ip_layer_obj, 'tclass_dscp', frame_number)
                     if tclass_dscp_str:
-                        dscp_val = int(tclass_dscp_str)
+                        dscp_val = _safe_int(tclass_dscp_str)
                     elif hasattr(ip_layer_obj, 'tclass'):
                         tclass_hex = _get_pyshark_layer_attribute(ip_layer_obj, 'tclass', frame_number)
                         if tclass_hex:
@@ -464,7 +481,8 @@ def _parse_with_pyshark(
                     protocol_l3 = "ARP"
                     arp_layer = packet.arp
                     opcode_str = _get_pyshark_layer_attribute(arp_layer, 'opcode', frame_number)
-                    if opcode_str: arp_opcode_val = int(opcode_str)
+                    if opcode_str:
+                        arp_opcode_val = _safe_int(opcode_str)
                     arp_sender_mac_str = _get_pyshark_layer_attribute(arp_layer, 'src_hw_mac', frame_number)
                     arp_sender_ip_str = _get_pyshark_layer_attribute(arp_layer, 'src_proto_ipv4', frame_number)
                     arp_target_mac_str = _get_pyshark_layer_attribute(arp_layer, 'dst_hw_mac', frame_number)
@@ -494,28 +512,33 @@ def _parse_with_pyshark(
                     tcp_flags_cwr = _get_pyshark_layer_attribute(tcp_layer, 'flags_cwr', frame_number, is_flag=True)
 
                     seq_str = _get_pyshark_layer_attribute(tcp_layer, 'seq', frame_number)
-                    if seq_str: tcp_sequence_number = int(seq_str)
+                    if seq_str:
+                        tcp_sequence_number = _safe_int(seq_str)
                     ack_str = _get_pyshark_layer_attribute(tcp_layer, 'ack', frame_number)
-                    if ack_str: tcp_acknowledgment_number = int(ack_str)
+                    if ack_str:
+                        tcp_acknowledgment_number = _safe_int(ack_str)
 
                     win_val_str = _get_pyshark_layer_attribute(tcp_layer, 'window_size_value', frame_number)
                     if win_val_str:
-                        tcp_window_size = int(win_val_str)
-                        adv_window_val = int(win_val_str)
+                        tcp_window_size = _safe_int(win_val_str)
+                        adv_window_val = _safe_int(win_val_str)
                     else: # Fallback
                         win_str = _get_pyshark_layer_attribute(tcp_layer, 'window_size', frame_number)
                         if win_str:
-                            tcp_window_size = int(win_str)
-                            adv_window_val = int(win_str)
+                            tcp_window_size = _safe_int(win_str)
+                            adv_window_val = _safe_int(win_str)
 
                     stream_str = _get_pyshark_layer_attribute(tcp_layer, 'stream', frame_number)
-                    if stream_str: tcp_stream_index = int(stream_str)
+                    if stream_str:
+                        tcp_stream_index = _safe_int(stream_str)
 
                     mss_val_str = _get_pyshark_layer_attribute(tcp_layer, 'options_mss_val', frame_number)
-                    if mss_val_str: tcp_options_mss = int(mss_val_str)
+                    if mss_val_str:
+                        tcp_options_mss = _safe_int(mss_val_str)
                     else: # Fallback
                         mss_str = _get_pyshark_layer_attribute(tcp_layer, 'mss_val', frame_number)
-                        if mss_str: tcp_options_mss = int(mss_str)
+                        if mss_str:
+                            tcp_options_mss = _safe_int(mss_str)
 
                     sack_perm_str = _get_pyshark_layer_attribute(tcp_layer, 'options_sack_permit', frame_number) # Note: pyshark might use 'sack_perm' or 'options_sack_permit'
                     if sack_perm_str is not None: tcp_options_sack_permitted = _safe_str_to_bool(sack_perm_str)
@@ -524,13 +547,15 @@ def _parse_with_pyshark(
                         if sack_perm_alt_str is not None: tcp_options_sack_permitted = _safe_str_to_bool(sack_perm_alt_str)
 
                     wscale_val_str = _get_pyshark_layer_attribute(tcp_layer, 'options_wscale_val', frame_number)
-                    if wscale_val_str: tcp_options_window_scale = int(wscale_val_str)
+                    if wscale_val_str:
+                        tcp_options_window_scale = _safe_int(wscale_val_str)
                     else: # Fallback for 'window_scale_multiplier' or 'ws_val'
                         wscale_mult_str = _get_pyshark_layer_attribute(tcp_layer, 'window_scale_multiplier', frame_number)
-                        if wscale_mult_str: tcp_options_window_scale = int(wscale_mult_str)
+                        if wscale_mult_str:
+                            tcp_options_window_scale = _safe_int(wscale_mult_str)
 
                     payload_len_str = _get_pyshark_layer_attribute(tcp_layer, 'len', frame_number)
-                    payload_len_int = int(payload_len_str) if payload_len_str else 0
+                    payload_len_int = _safe_int(payload_len_str) if payload_len_str else 0
                     flow_key = _flow_history_key(source_ip, source_port, destination_ip, destination_port)
 
 
@@ -556,8 +581,11 @@ def _parse_with_pyshark(
                         dup_num_raw = _get_analysis_attr('duplicate_ack_num')
                         if dup_num_raw is not None:
                             try:
-                                dup_ack_num_val = int(dup_num_raw)
-                                tcp_analysis_duplicate_ack_flags.append(f'duplicate_ack_num:{dup_ack_num_val}')
+                                dup_ack_num_val = _safe_int(dup_num_raw)
+                                if dup_ack_num_val is not None:
+                                    tcp_analysis_duplicate_ack_flags.append(f'duplicate_ack_num:{dup_ack_num_val}')
+                                else:
+                                    tcp_analysis_duplicate_ack_flags.append('duplicate_ack_num')
                             except Exception:
                                 tcp_analysis_duplicate_ack_flags.append('duplicate_ack_num')
 
@@ -608,9 +636,11 @@ def _parse_with_pyshark(
 
                 if transport_layer_obj:
                     srcport_str = _get_pyshark_layer_attribute(transport_layer_obj, 'srcport', frame_number)
-                    if srcport_str: source_port = int(srcport_str)
+                    if srcport_str:
+                        source_port = _safe_int(srcport_str)
                     dstport_str = _get_pyshark_layer_attribute(transport_layer_obj, 'dstport', frame_number)
-                    if dstport_str: destination_port = int(dstport_str)
+                    if dstport_str:
+                        destination_port = _safe_int(dstport_str)
 
                 if hasattr(packet, 'tls'):
                     sni = _extract_sni_pyshark(packet) # SNI extraction uses its own logic
@@ -701,7 +731,8 @@ def _parse_with_pyshark(
                         http_x_forwarded_for_header_str = _get_pyshark_layer_attribute(http_layer, 'x_forwarded_for', frame_number)
                     elif hasattr(http_layer, 'response_code'):
                         resp_code_str = _get_pyshark_layer_attribute(http_layer, 'response_code', frame_number)
-                        if resp_code_str: http_response_code_int = int(resp_code_str)
+                        if resp_code_str:
+                            http_response_code_int = _safe_int(resp_code_str)
                         http_response_location_header_str = _get_pyshark_layer_attribute(http_layer, 'location', frame_number)
                     # If x_forwarded_for exists but not in request (e.g. response context, though less common)
                     elif hasattr(http_layer, 'x_forwarded_for') and not http_request_method_str:
@@ -716,9 +747,11 @@ def _parse_with_pyshark(
 
                 if icmp_layer_to_process:
                     type_str = _get_pyshark_layer_attribute(icmp_layer_to_process, 'type', frame_number)
-                    if type_str: icmp_type_val = int(type_str)
+                    if type_str:
+                        icmp_type_val = _safe_int(type_str)
                     code_str = _get_pyshark_layer_attribute(icmp_layer_to_process, 'code', frame_number)
-                    if code_str: icmp_code_val = int(code_str)
+                    if code_str:
+                        icmp_code_val = _safe_int(code_str)
 
                     # ICMP Fragmentation Needed / Packet Too Big
                     is_frag_needed_v4 = (protocol_l4 == "ICMP" and icmp_type_val == 3 and icmp_code_val == 4)
@@ -726,10 +759,12 @@ def _parse_with_pyshark(
 
                     if is_frag_needed_v4 or is_packet_too_big_v6:
                         mtu_str = _get_pyshark_layer_attribute(icmp_layer_to_process, 'mtu', frame_number) # Common field name
-                        if mtu_str: icmp_frag_mtu_val = int(mtu_str)
+                        if mtu_str:
+                            icmp_frag_mtu_val = _safe_int(mtu_str)
                         elif is_frag_needed_v4: # Fallback for ICMPv4 specific field name
                             nexthopmtu_str = _get_pyshark_layer_attribute(icmp_layer_to_process, 'nexthopmtu', frame_number)
-                            if nexthopmtu_str: icmp_frag_mtu_val = int(nexthopmtu_str)
+                            if nexthopmtu_str:
+                                icmp_frag_mtu_val = _safe_int(nexthopmtu_str)
 
                 # DHCP can be over 'bootp' layer in pyshark
                 dhcp_layer_source = None
