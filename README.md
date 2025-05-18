@@ -58,3 +58,58 @@ config.py—single source of truth; ENV=dev sets SQLite, eager Celery, stub Serv
 docker-compose.dev.yml—optional; lets you add RabbitMQ or MinIO locally without changing code.
 
 These changes keep the codebase production-ready while letting you run everything on your Mac today with uvicorn src.api.main:app --reload.
+
+## Prerequisites
+
+* Python (e.g., 3.12 - as per Action Plan)
+* pip (for Python package management)
+* tshark (will be installed by the setup script if using one, or needs manual install)
+* [Node.js & npm/yarn - if frontend setup is included]
+* [Docker - if docker-compose.dev.yml is a primary setup method]
+
+## Local Development Setup
+
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository_url>
+    cd pcap-tool
+    ```
+2.  **Create and activate a virtual environment (recommended):**
+    ```bash
+    python3 -m venv .venv
+    source .venv/bin/activate
+    ```
+3.  **Install system dependencies (if not using a comprehensive setup script like the one we discussed):**
+    *(Mention tshark or point to the setup script)*
+4.  **Install Python dependencies:**
+    ```bash
+    pip install --upgrade pip
+    pip install -r requirements.txt
+    ```
+5.  **Set up environment variables:**
+    ```bash
+    cp .env.example .env
+    ```
+    *(Mention if any variables in .env need to be changed for a basic local run)*
+6.  **Initialize the database (if applicable):**
+    ```bash
+    python src/scripts/initialize_db.py # Or whatever your script is
+    ```
+
+## Running the Application
+
+* **Backend API (FastAPI):**
+    ```bash
+    uvicorn src.api.main:app --reload
+    ```
+    *(API will be available at http://localhost:8000)*
+* **Frontend WebUI (React):**
+    *(Add commands here, e.g., `cd path/to/frontend && npm start`)*
+    *(WebUI will be available at http://localhost:3000)*
+* **Celery Workers (if not using eager mode for specific testing):**
+    *(Add command if needed)*
+
+## Running Tests
+
+```bash
+pytest
