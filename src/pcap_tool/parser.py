@@ -116,6 +116,7 @@ class PcapRecord:
     tcp_analysis_window_flags: list[str] = field(default_factory=list)
     dup_ack_num: Optional[int] = None
     adv_window: Optional[int] = None
+    tcp_rtt_ms: Optional[float] = None
     tls_handshake_type: Optional[str] = None; tls_handshake_version: Optional[str] = None
     tls_record_version: Optional[str] = None; tls_cipher_suites_offered: Optional[List[str]] = None
     tls_cipher_suite_selected: Optional[str] = None; tls_alert_message_description: Optional[str] = None
@@ -364,6 +365,8 @@ def _parse_with_pyshark(
     generated_records = 0
     cap = None
     flow_orientation: dict[Any, tuple[str | None, int | None]] = {}
+    tcp_syn_times: dict[tuple[str, int, str, int, str], float] = {}
+    tcp_rtt_samples: defaultdict[tuple[str, int, str, int, str], list[float]] = defaultdict(list)
     try:
         display_filter = None
         if start or slice_size:
@@ -385,6 +388,20 @@ def _parse_with_pyshark(
                 "tls.desegment_ssl_application_data:TRUE",
             ],
         )
+        try:
+            cap.load_packets(timeout=5)
+            logger.info(
+                f"PyShark capture loaded. Number of packets initially found by PyShark: {len(cap)}"
+            )
+            if len(cap) == 0:
+                logger.warning(
+                    f"PyShark found 0 packets in {file_path}. Check file and filters."
+                )
+        except Exception as e_load:
+            logger.error(
+                f"Error during PyShark cap.load_packets() or initial packet count: {e_load}",
+                exc_info=True,
+            )
     except pyshark.tshark.tshark.TSharkNotFoundException as e_tshark:
         logger.error(f"PyShark TSharkNotFoundException: {e_tshark}. Ensure TShark is installed and in PATH.")
         raise RuntimeError(f"PyShark critical error: TShark not found.") from e_tshark
@@ -434,6 +451,7 @@ def _parse_with_pyshark(
     packet_count = 0
     try:
         for packet in cap:
+            logger.debug(f"Processing raw packet/record: {str(packet)[:200]}")
             if max_packets is not None and generated_records >= max_packets:
                 logger.info(f"PyShark: Reached max_packets limit of {max_packets}.")
                 break
@@ -547,16 +565,26 @@ def _parse_with_pyshark(
                 else:
                     # For non-IP/non-ARP, yield basic L2 info if available
                     if packet_count > generated_records:
+
                          yield PcapRecord(
-                            frame_number=frame_number, timestamp=timestamp,
-                            source_mac=source_mac, destination_mac=destination_mac,
-                            packet_length=packet_length_val, raw_packet_summary=raw_summary
+                            frame_number=frame_number,
+                            timestamp=timestamp,
+                            source_mac=source_mac,
+                            destination_mac=destination_mac,
+                            packet_length=packet_length_val,
+                            raw_packet_summary=raw_summary,
+                            tcp_rtt_ms=None,
+
+
                             # Other fields default to None
                          )
+                         logger.debug(f"Appending processed packet to list: {record_obj}")
+                         yield record_obj
                          generated_records +=1
                     continue # Skip to next packet
 
                 transport_layer_obj = None
+                tcp_rtt_ms_sample = None
                 if protocol_l4 == "TCP" and hasattr(packet, 'tcp'):
                     transport_layer_obj = packet.tcp; tcp_layer = transport_layer_obj
                     tcp_flags_syn = _get_pyshark_layer_attribute(tcp_layer, 'flags_syn', frame_number, is_flag=True)
@@ -574,6 +602,13 @@ def _parse_with_pyshark(
                     ack_str = _get_pyshark_layer_attribute(tcp_layer, 'ack', frame_number)
                     if ack_str:
                         tcp_acknowledgment_number = _safe_int(ack_str)
+
+                    srcport_str = _get_pyshark_layer_attribute(tcp_layer, 'srcport', frame_number)
+                    if srcport_str:
+                        source_port = _safe_int(srcport_str)
+                    dstport_str = _get_pyshark_layer_attribute(tcp_layer, 'dstport', frame_number)
+                    if dstport_str:
+                        destination_port = _safe_int(dstport_str)
 
                     win_val_str = _get_pyshark_layer_attribute(tcp_layer, 'window_size_value', frame_number)
                     if win_val_str:
@@ -625,6 +660,48 @@ def _parse_with_pyshark(
                             source_ip == orient[0] and source_port == orient[1]
                         )
 
+                    tcp_rtt_ms_sample = None
+                    if tcp_flags_syn and not tcp_flags_ack:
+                        rtt_key = (
+                            source_ip or "",
+                            source_port or -1,
+                            destination_ip or "",
+                            destination_port or -1,
+                            "TCP",
+                        )
+                        if rtt_key not in tcp_syn_times:
+                            if (
+                                source_ip
+                                and destination_ip
+                                and source_port is not None
+                                and destination_port is not None
+                            ):
+                                tcp_syn_times[rtt_key] = timestamp
+                            else:
+                                logger.warning(
+                                    "Could not extract SYN data for RTT calculation for packet %s in flow %s",
+                                    frame_number,
+                                    rtt_key,
+                                )
+                    elif tcp_flags_syn and tcp_flags_ack:
+                        rtt_key_rev = (
+                            destination_ip or "",
+                            destination_port or -1,
+                            source_ip or "",
+                            source_port or -1,
+                            "TCP",
+                        )
+                        syn_ts = tcp_syn_times.get(rtt_key_rev)
+                        if syn_ts is not None:
+                            tcp_rtt_ms_sample = (timestamp - syn_ts) * 1000.0
+                            tcp_rtt_samples[rtt_key_rev].append(tcp_rtt_ms_sample)
+                            del tcp_syn_times[rtt_key_rev]
+                        else:
+                            logger.debug(
+                                "No matching SYN found for SYN-ACK packet %s in flow %s",
+                                frame_number,
+                                rtt_key_rev,
+                            )
 
                     if tcp_layer:
                         analysis_layer = getattr(tcp_layer, 'analysis', None)
@@ -933,7 +1010,7 @@ def _parse_with_pyshark(
 
                 cert_meta = _extract_certificate_metadata(packet)
 
-                yield PcapRecord(
+                record_obj = PcapRecord(
                     frame_number=frame_number, timestamp=timestamp,
                     source_ip=source_ip, destination_ip=destination_ip,
                     source_port=source_port, destination_port=destination_port,
@@ -959,6 +1036,7 @@ def _parse_with_pyshark(
                     tcp_analysis_window_flags=tcp_analysis_window_flags,
                     dup_ack_num=dup_ack_num_val,
                     adv_window=adv_window_val,
+                    tcp_rtt_ms=tcp_rtt_ms_sample,
                     tls_handshake_type=tls_handshake_type_str,
                     tls_handshake_version=tls_handshake_version_str,
                     tls_record_version=tls_record_version_str,
@@ -997,6 +1075,8 @@ def _parse_with_pyshark(
                     zscaler_policy_block_type=zscaler_policy_block_type_str,
                     **cert_meta,
                 )
+                logger.debug(f"Appending processed packet to list: {record_obj}")
+                yield record_obj
                 generated_records += 1
             except AttributeError as ae: # This should be less common with _get_pyshark_layer_attribute
                 logger.warning(f"Frame {packet_count}: Attribute error processing packet details: {ae}. Packet Layers: {[l.layer_name for l in packet.layers if hasattr(l, 'layer_name')]}", exc_info=False) # exc_info=False to reduce noise if frequent
@@ -1018,7 +1098,9 @@ def _parse_with_pyshark(
 def _parse_with_pcapkit(file_path: str, max_packets: Optional[int]) -> Generator[PcapRecord, None, None]:
     logger.info(f"Attempting to parse with PCAPKit (fallback): {file_path}")
     logger.warning("PCAPKit fallback: Most new fields are not implemented in this PcapKit path.")
-    if False: yield # This makes it a generator
+    logger.info("PCAPKit: Extraction stub -- no packets will be returned.")
+    if False:
+        yield  # This makes it a generator
     logger.info("PCAPKit: Processing complete (stubbed).")
     return # Or raise StopIteration implicitly
 
@@ -1260,6 +1342,7 @@ def iter_parsed_frames(
     if record_generator is None:
         logger.error("No valid parser (PyShark or PCAPKit) was successfully initiated or yielded records.")
         cols = [f.name for f in PcapRecord.__dataclass_fields__.values()]
+        logger.debug("Yielding empty DataFrame because no records were generated")
         yield pd.DataFrame(columns=cols)
         if cleanup:
             os.unlink(path)
@@ -1271,7 +1354,10 @@ def iter_parsed_frames(
 
     try:
         for record in record_generator:
-            rows.append(asdict(record))
+            logger.debug(f"Processing raw packet/record: {record}")
+            processed_dict = asdict(record)
+            logger.debug(f"Appending processed packet to list: {processed_dict}")
+            rows.append(processed_dict)
             count += 1
             if on_progress and count >= next_callback:
                 on_progress(count, total_estimate)
@@ -1279,7 +1365,9 @@ def iter_parsed_frames(
             if len(rows) >= chunk_size:
                 if on_progress:
                     on_progress(count, total_estimate)
-                yield pd.DataFrame(rows)
+                df_chunk = pd.DataFrame(rows)
+                logger.debug(f"Yielding DataFrame chunk with shape: {df_chunk.shape}")
+                yield df_chunk
                 rows.clear()
             if max_packets is not None and count >= max_packets:
                 break
@@ -1293,9 +1381,12 @@ def iter_parsed_frames(
     if rows:
         if on_progress:
             on_progress(count, total_estimate)
-        yield pd.DataFrame(rows)
+        df_chunk = pd.DataFrame(rows)
+        logger.debug(f"Yielding final DataFrame chunk with shape: {df_chunk.shape}")
+        yield df_chunk
     elif count == 0:
         cols = [f.name for f in PcapRecord.__dataclass_fields__.values()]
+        logger.debug("Yielding empty DataFrame at end because no packets were processed")
         yield pd.DataFrame(columns=cols)
 
 
@@ -1314,6 +1405,9 @@ def parse_pcap_to_df(
     """
 
 
+    logger.info(f"Attempting to parse PCAP file: {file_like}")
+    logger.info(f"Effective _USE_PYSHARK: {_USE_PYSHARK}, _USE_PCAPKIT: {_USE_PCAPKIT}")
+
     chunks = list(
         iter_parsed_frames(
             file_like,
@@ -1323,10 +1417,16 @@ def parse_pcap_to_df(
             workers=workers,
         )
     )
+    total_packets = sum(len(c) for c in chunks)
+    logger.info(f"Total processed packets collected for DataFrame: {total_packets}")
+    if total_packets == 0:
+        logger.warning("No packets were processed into the final list. DataFrame will be empty.")
     if not chunks:
         cols = [f.name for f in PcapRecord.__dataclass_fields__.values()]
         return pd.DataFrame(columns=cols)
-    return pd.concat(chunks, ignore_index=True)
+    df = pd.concat(chunks, ignore_index=True)
+    logger.info(f"DataFrame created with shape: {df.shape if isinstance(df, pd.DataFrame) else 'Not a DataFrame'}")
+    return df
 
 
 class ParsedHandle:
@@ -1454,6 +1554,8 @@ def parse_pcap(
     on_progress: Callable[[int, Optional[int]], None] | None = None,
 ) -> ParsedHandle:
     """Parse ``file_like`` and return a handle to the parsed flows."""
+
+    logger.info(f"parse_pcap called with file_like: {file_like}")
 
     if output_uri is None:
         df = parse_pcap_to_df(
