@@ -16,7 +16,7 @@ class TimelineBuilder:
 
     def add_packet(self, record: PcapRecord) -> None:
         """Add a packet record to the timeline."""
-        sec_bin = int(record.timestamp)
+        sec_bin = int(record.timestamp or 0)
         self.bytes_per_second[sec_bin] += record.packet_length or 0
         self.packets_per_second[sec_bin] += 1
 

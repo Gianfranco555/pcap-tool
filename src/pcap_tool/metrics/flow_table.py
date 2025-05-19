@@ -36,23 +36,20 @@ class FlowTable:
         self.flows: Dict[Tuple[str, str, int, int, str], Flow] = {}
 
     def _get_key(self, rec: PcapRecord, is_src_client: bool) -> Tuple[str, str, int, int, str]:
+        src_ip = rec.source_ip or ""
+        dest_ip = rec.destination_ip or ""
+        src_port = int(rec.source_port or 0)
+        dest_port = int(rec.destination_port or 0)
+        proto = rec.protocol or ""
         if is_src_client:
-            return rec.source_ip or "", rec.destination_ip or "", int(rec.source_port or 0), int(
-                rec.destination_port or 0
-            ), rec.protocol or ""
-        return (
-            rec.destination_ip or "",
-            rec.source_ip or "",
-            int(rec.destination_port or 0),
-            int(rec.source_port or 0),
-            rec.protocol or "",
-        )
+            return src_ip, dest_ip, src_port, dest_port, proto
+        return dest_ip, src_ip, dest_port, src_port, proto
 
     def add_packet(self, record: PcapRecord, is_src_client: bool) -> None:
         """Update flow counters from ``record``."""
         key = self._get_key(record, is_src_client)
         flow = self.flows.get(key)
-        ts = float(record.timestamp)
+        ts = float(record.timestamp or 0.0)
         length = int(record.packet_length or 0)
         if flow is None:
             flow = Flow(
