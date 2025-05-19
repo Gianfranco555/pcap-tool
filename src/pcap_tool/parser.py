@@ -452,7 +452,6 @@ def _parse_with_pyshark(
     packet_count = 0
     try:
         for packet in cap:
-            logger.debug(f"Processing raw packet/record: {str(packet)[:200]}")
             if max_packets is not None and generated_records >= max_packets:
                 logger.info(f"PyShark: Reached max_packets limit of {max_packets}.")
                 break
@@ -566,7 +565,10 @@ def _parse_with_pyshark(
                 else:
                     # For non-IP/non-ARP, yield basic L2 info if available
                     if packet_count > generated_records:
-                        record_obj = PcapRecord(
+
+
+                        yield PcapRecord(
+
                             frame_number=frame_number,
                             timestamp=timestamp,
                             source_mac=source_mac,
@@ -577,10 +579,7 @@ def _parse_with_pyshark(
 
                             # Other fields default to None
                         )
-                        logger.debug(
-                            f"Appending processed packet to list: {record_obj}"
-                        )
-                        yield record_obj
+
                         generated_records += 1
 
                     continue # Skip to next packet
@@ -1077,7 +1076,6 @@ def _parse_with_pyshark(
                     zscaler_policy_block_type=zscaler_policy_block_type_str,
                     **cert_meta,
                 )
-                logger.debug(f"Appending processed packet to list: {record_obj}")
                 yield record_obj
                 generated_records += 1
             except AttributeError as ae: # This should be less common with _get_pyshark_layer_attribute
@@ -1369,9 +1367,9 @@ def iter_parsed_frames(
 
     try:
         for record in record_generator:
-            logger.debug(f"Processing raw packet/record: {record}")
+            # logger.debug(f"Processing raw packet/record: {record}")
             processed_dict = asdict(record)
-            logger.debug(f"Appending processed packet to list: {processed_dict}")
+            # logger.debug(f"Appending processed packet to list: {processed_dict}")
             rows.append(processed_dict)
             count += 1
             if on_progress and count >= next_callback:
@@ -1381,7 +1379,7 @@ def iter_parsed_frames(
                 if on_progress:
                     on_progress(count, total_estimate)
                 df_chunk = pd.DataFrame(rows)
-                logger.debug(f"Yielding DataFrame chunk with shape: {df_chunk.shape}")
+                # logger.debug(f"Yielding DataFrame chunk with shape: {df_chunk.shape}")
                 yield df_chunk
                 rows.clear()
             if max_packets is not None and count >= max_packets:
@@ -1397,11 +1395,11 @@ def iter_parsed_frames(
         if on_progress:
             on_progress(count, total_estimate)
         df_chunk = pd.DataFrame(rows)
-        logger.debug(f"Yielding final DataFrame chunk with shape: {df_chunk.shape}")
+        # logger.debug(f"Yielding final DataFrame chunk with shape: {df_chunk.shape}")
         yield df_chunk
     elif count == 0:
         cols = [f.name for f in PcapRecord.__dataclass_fields__.values()]
-        logger.debug("Yielding empty DataFrame at end because no packets were processed")
+        # logger.debug("Yielding empty DataFrame at end because no packets were processed")
         yield pd.DataFrame(columns=cols)
 
 
