@@ -1,0 +1,67 @@
+import sys
+import types
+
+# Define minimal stub for geoip2
+class AddressNotFoundError(Exception):
+    pass
+
+class FakeCityRecord:
+    def __init__(self):
+        self.country = types.SimpleNamespace(name="Testland")
+        self.city = types.SimpleNamespace(name="Exampleville")
+        self.location = types.SimpleNamespace(latitude=1.23, longitude=4.56)
+
+class FakeReader:
+    def __init__(self, path):
+        self.path = path
+
+    def city(self, ip):
+        if ip == "1.2.3.4":
+            return FakeCityRecord()
+        raise AddressNotFoundError("not found")
+
+geoip2_mod = types.ModuleType("geoip2")
+database_mod = types.ModuleType("geoip2.database")
+errors_mod = types.ModuleType("geoip2.errors")
+
+database_mod.Reader = FakeReader
+errors_mod.AddressNotFoundError = AddressNotFoundError
+
+database_mod.__dict__["AddressNotFoundError"] = AddressNotFoundError
+
+geoip2_mod.database = database_mod
+geoip2_mod.errors = errors_mod
+
+sys.modules.setdefault("geoip2", geoip2_mod)
+sys.modules.setdefault("geoip2.database", database_mod)
+sys.modules.setdefault("geoip2.errors", errors_mod)
+
+import geoip2.database
+
+from pcap_tool.enrichment import Enricher
+
+
+def test_get_geoip_no_db():
+    enricher = Enricher()
+    assert enricher.get_geoip("8.8.8.8") is None
+
+
+def test_get_geoip_with_reader(monkeypatch):
+    monkeypatch.setattr(geoip2.database, "Reader", lambda p: FakeReader(p))
+    enricher = Enricher(geoip_city_db_path="dummy.mmdb")
+    result = enricher.get_geoip("1.2.3.4")
+    assert result == {
+        "country": "Testland",
+        "city": "Exampleville",
+        "latitude": 1.23,
+        "longitude": 4.56,
+    }
+    assert enricher.get_geoip("9.9.9.9") is None
+
+
+def test_enrich_ips_includes_geo(monkeypatch):
+    monkeypatch.setattr(geoip2.database, "Reader", lambda p: FakeReader(p))
+    enricher = Enricher(geoip_city_db_path="dummy.mmdb")
+    info = enricher.enrich_ips(["1.2.3.4"])
+    assert info["1.2.3.4"]["geo"]["country"] == "Testland"
+
