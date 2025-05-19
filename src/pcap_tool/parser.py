@@ -566,8 +566,7 @@ def _parse_with_pyshark(
                 else:
                     # For non-IP/non-ARP, yield basic L2 info if available
                     if packet_count > generated_records:
-
-                         yield PcapRecord(
+                        record_obj = PcapRecord(
                             frame_number=frame_number,
                             timestamp=timestamp,
                             source_mac=source_mac,
@@ -576,12 +575,13 @@ def _parse_with_pyshark(
                             raw_packet_summary=raw_summary,
                             tcp_rtt_ms=None,
 
-
                             # Other fields default to None
-                         )
-                         logger.debug(f"Appending processed packet to list: {record_obj}")
-                         yield record_obj
-                         generated_records +=1
+                        )
+                        logger.debug(
+                            f"Appending processed packet to list: {record_obj}"
+                        )
+                        yield record_obj
+                        generated_records += 1
                     continue # Skip to next packet
 
                 transport_layer_obj = None
