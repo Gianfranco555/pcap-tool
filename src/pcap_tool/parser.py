@@ -375,6 +375,7 @@ def _parse_with_pyshark(
                 display_filter = f"frame.number>={start + 1} && frame.number<={end}"
             else:
                 display_filter = f"frame.number>={start + 1}"
+        logger.debug("PyShark display_filter set to: %s", display_filter)
         cap = pyshark.FileCapture(
             file_path,
             use_json=False,
@@ -1157,6 +1158,7 @@ def _estimate_total_packets(path: Path) -> Optional[int]:
         except (subprocess.SubprocessError, FileNotFoundError) as exc:  # pragma: no cover - best effort only
             logger.debug("capinfos failed with %s: %s", cmd[0], exc)
 
+    logger.debug("capinfos did not return a packet count")
     return None
 
 
@@ -1318,6 +1320,7 @@ def iter_parsed_frames(
             start=_slice_start,
             slice_size=_slice_size,
         )
+        logger.info("Using parser backend: %s", parser_used)
     else:
         total_packets = total_estimate
         if max_packets is not None:
@@ -1428,6 +1431,7 @@ def parse_pcap_to_df(
             workers=workers,
         )
     )
+    logger.info("Number of DataFrame chunks produced: %s", len(chunks))
     total_packets = sum(len(c) for c in chunks)
     logger.info(f"Total processed packets collected for DataFrame: {total_packets}")
     if total_packets == 0:
