@@ -43,7 +43,7 @@ class PerformanceAnalyzer:
             if is_client_packet and record.tcp_flags_syn and not record.tcp_flags_ack:
                 entry = self.tcp_syn_timestamps[flow_id_str]
                 entry["client_syn_ts"] = record.timestamp
-                entry["client_seq"] = record.tcp_sequence_number
+                entry["client_seq"] = int(record.tcp_sequence_number or 0)
 
             if (
                 not is_client_packet
@@ -54,7 +54,7 @@ class PerformanceAnalyzer:
                 if (
                     entry
                     and entry.get("client_syn_ts") is not None
-                    and record.tcp_acknowledgment_number
+                    and int(record.tcp_acknowledgment_number or -1)
                     == (entry.get("client_seq") or 0) + 1
                 ):
                     rtt = (record.timestamp - float(entry["client_syn_ts"])) * 1000

@@ -20,9 +20,9 @@ class StatsCollector:
             key = str(proto).lower()
             self.protocol_counts[key] += 1
 
-            dest_port = record.destination_port
-            if dest_port is not None and dest_port == dest_port and key in {"tcp", "udp"}:
-                port_key = f"{key}_{int(dest_port)}"
+            if key in {"tcp", "udp"}:
+                port_val = int(record.destination_port or 0)
+                port_key = f"{key}_{port_val}"
                 self.port_counts[port_key] += 1
 
     def summary(self) -> Dict[str, Dict[str, int]]:
