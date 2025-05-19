@@ -21,6 +21,7 @@ from concurrent.futures import ProcessPoolExecutor
 from collections import defaultdict, deque
 
 from .exceptions import CorruptPcapError
+from .heuristics.errors import detect_packet_error
 
 logger = logging.getLogger(__name__)
 
@@ -591,7 +592,19 @@ def _parse_with_pyshark(
                     tcp_flags_syn = _get_pyshark_layer_attribute(tcp_layer, 'flags_syn', frame_number, is_flag=True)
                     tcp_flags_ack = _get_pyshark_layer_attribute(tcp_layer, 'flags_ack', frame_number, is_flag=True)
                     tcp_flags_fin = _get_pyshark_layer_attribute(tcp_layer, 'flags_fin', frame_number, is_flag=True)
-                    tcp_flags_rst = _get_pyshark_layer_attribute(tcp_layer, 'flags_rst', frame_number, is_flag=True)
+                    tcp_flags_rst = _get_pyshark_layer_attribute(
+                        tcp_layer,
+                        'flags_rst',
+                        frame_number,
+                        is_flag=True,
+                    )
+                    if tcp_flags_rst is None:
+                        tcp_flags_rst = _get_pyshark_layer_attribute(
+                            tcp_layer,
+                            'flags_reset',
+                            frame_number,
+                            is_flag=True,
+                        )
                     tcp_flags_psh = _get_pyshark_layer_attribute(tcp_layer, 'flags_push', frame_number, is_flag=True) # pyshark uses 'flags_push'
                     tcp_flags_urg = _get_pyshark_layer_attribute(tcp_layer, 'flags_urg', frame_number, is_flag=True)
                     tcp_flags_ece = _get_pyshark_layer_attribute(tcp_layer, 'flags_ece', frame_number, is_flag=True)
@@ -1354,7 +1367,9 @@ def iter_parsed_frames(
 
     if record_generator is None:
         logger.error("No valid parser (PyShark or PCAPKit) was successfully initiated or yielded records.")
-        cols = [f.name for f in PcapRecord.__dataclass_fields__.values()]
+        cols = [f.name for f in PcapRecord.__dataclass_fields__.values()] + [
+            "packet_error_reason"
+        ]
         logger.debug("Yielding empty DataFrame because no records were generated")
         yield pd.DataFrame(columns=cols)
         if cleanup:
@@ -1369,6 +1384,7 @@ def iter_parsed_frames(
         for record in record_generator:
             # logger.debug(f"Processing raw packet/record: {record}")
             processed_dict = asdict(record)
+            processed_dict["packet_error_reason"] = detect_packet_error(processed_dict)
             # logger.debug(f"Appending processed packet to list: {processed_dict}")
             rows.append(processed_dict)
             count += 1
@@ -1398,7 +1414,9 @@ def iter_parsed_frames(
         # logger.debug(f"Yielding final DataFrame chunk with shape: {df_chunk.shape}")
         yield df_chunk
     elif count == 0:
-        cols = [f.name for f in PcapRecord.__dataclass_fields__.values()]
+        cols = [f.name for f in PcapRecord.__dataclass_fields__.values()] + [
+            "packet_error_reason"
+        ]
         # logger.debug("Yielding empty DataFrame at end because no packets were processed")
         yield pd.DataFrame(columns=cols)
 
@@ -1436,7 +1454,9 @@ def parse_pcap_to_df(
     if total_packets == 0:
         logger.warning("No packets were processed into the final list. DataFrame will be empty.")
     if not chunks:
-        cols = [f.name for f in PcapRecord.__dataclass_fields__.values()]
+        cols = [f.name for f in PcapRecord.__dataclass_fields__.values()] + [
+            "packet_error_reason"
+        ]
         return pd.DataFrame(columns=cols)
     df = pd.concat(chunks, ignore_index=True)
     logger.info(f"DataFrame created with shape: {df.shape if isinstance(df, pd.DataFrame) else 'Not a DataFrame'}")
