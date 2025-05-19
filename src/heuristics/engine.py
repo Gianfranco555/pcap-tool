@@ -2,7 +2,7 @@ import yaml
 import pandas as pd
 import ipaddress  # For CIDR checks
 import re  # For regex checks
-import logging
+from pcap_tool.logging import get_logger
 from typing import List, Dict, Any, Optional, TypedDict, Union, Callable, Tuple
 import argparse
 import os
@@ -11,14 +11,7 @@ import sys
 from pcap_tool.exceptions import RuleFileError
 
 # Configure logging
-logger = logging.getLogger(__name__)
-# Set default logging handler to avoid "No handler found" warnings.
-if not logger.handlers:
-    handler = logging.StreamHandler(sys.stdout)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
+logger = get_logger(__name__)
 
 
 __all__ = ["HeuristicEngine"]

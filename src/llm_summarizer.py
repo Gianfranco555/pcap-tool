@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-import logging
+from pcap_tool.logging import get_logger
 import os
 import time
 from typing import Optional
@@ -11,7 +11,7 @@ from pathlib import Path
 
 import openai
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class LLMSummarizerError(Exception):

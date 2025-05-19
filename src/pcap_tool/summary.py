@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Iterable, Optional, IO, Any
 import pandas as pd
-import logging
+from pcap_tool.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 _PRIORITY_ORDER = ["Blocked", "Degraded", "Allowed", "Unknown"]
