@@ -20,6 +20,8 @@ from math import ceil
 from concurrent.futures import ProcessPoolExecutor
 from collections import defaultdict, deque
 
+from .exceptions import CorruptPcapError
+
 logger = logging.getLogger(__name__)
 
 _USE_PYSHARK = False
@@ -42,6 +44,32 @@ except ImportError:
 
 if not _USE_PYSHARK and not _USE_PCAPKIT:
     logger.error("Neither PyShark nor PCAPKit is available. PCAP parsing will not function.")
+
+# --- PCAP validation constants ---
+_MAGIC_PCAP_LE = b"\xd4\xc3\xb2\xa1"
+_MAGIC_PCAP_BE = b"\xa1\xb2\xc3\xd4"
+_MAGIC_PCAPNG = b"\x0a\x0d\x0d\x0a"
+
+
+def validate_pcap_file(filepath: str) -> bool:
+    """Return ``True`` if ``filepath`` appears to be a valid PCAP/PCAPNG file."""
+
+    path = Path(filepath)
+    if not path.is_file():
+        logger.warning("PCAP file does not exist: %s", filepath)
+        return False
+    try:
+        with path.open("rb") as f:
+            magic = f.read(4)
+    except OSError as exc:
+        logger.warning("Failed to read file %s: %s", filepath, exc)
+        return False
+
+    if magic in (_MAGIC_PCAP_LE, _MAGIC_PCAP_BE, _MAGIC_PCAPNG):
+        return True
+
+    logger.warning("Invalid PCAP magic number %s for %s", magic.hex(), filepath)
+    return False
 
 # --- Helper Dictionaries (TLS, DNS, DHCP from previous chunks) ---
 TLS_HANDSHAKE_TYPE_MAP = { '0': "HelloRequest", '1': "ClientHello", '2': "ServerHello", '4': "NewSessionTicket", '5': "EndOfEarlyData", '8': "EncryptedExtensions", '11': "Certificate", '12': "ServerKeyExchange", '13': "CertificateRequest", '14': "ServerHelloDone", '15': "CertificateVerify", '16': "ClientKeyExchange", '20': "Finished", '24': "CertificateStatus", '25': "KeyUpdate",}
@@ -359,6 +387,20 @@ def _parse_with_pyshark(
                 "tls.desegment_ssl_application_data:TRUE",
             ],
         )
+        try:
+            cap.load_packets(timeout=5)
+            logger.info(
+                f"PyShark capture loaded. Number of packets initially found by PyShark: {len(cap)}"
+            )
+            if len(cap) == 0:
+                logger.warning(
+                    f"PyShark found 0 packets in {file_path}. Check file and filters."
+                )
+        except Exception as e_load:
+            logger.error(
+                f"Error during PyShark cap.load_packets() or initial packet count: {e_load}",
+                exc_info=True,
+            )
     except pyshark.tshark.tshark.TSharkNotFoundException as e_tshark:
         logger.error(f"PyShark TSharkNotFoundException: {e_tshark}. Ensure TShark is installed and in PATH.")
         raise RuntimeError(f"PyShark critical error: TShark not found.") from e_tshark
@@ -408,6 +450,7 @@ def _parse_with_pyshark(
     packet_count = 0
     try:
         for packet in cap:
+            logger.debug(f"Processing raw packet/record: {str(packet)[:200]}")
             if max_packets is not None and generated_records >= max_packets:
                 logger.info(f"PyShark: Reached max_packets limit of {max_packets}.")
                 break
@@ -520,6 +563,7 @@ def _parse_with_pyshark(
                 else:
                     # For non-IP/non-ARP, yield basic L2 info if available
                     if packet_count > generated_records:
+
                          yield PcapRecord(
                             frame_number=frame_number,
                             timestamp=timestamp,
@@ -528,8 +572,12 @@ def _parse_with_pyshark(
                             packet_length=packet_length_val,
                             raw_packet_summary=raw_summary,
                             tcp_rtt_ms=None,
+
+
                             # Other fields default to None
                          )
+                         logger.debug(f"Appending processed packet to list: {record_obj}")
+                         yield record_obj
                          generated_records +=1
                     continue # Skip to next packet
 
@@ -932,7 +980,7 @@ def _parse_with_pyshark(
 
                 cert_meta = _extract_certificate_metadata(packet)
 
-                yield PcapRecord(
+                record_obj = PcapRecord(
                     frame_number=frame_number, timestamp=timestamp,
                     source_ip=source_ip, destination_ip=destination_ip,
                     source_port=source_port, destination_port=destination_port,
@@ -996,6 +1044,8 @@ def _parse_with_pyshark(
                     zscaler_policy_block_type=zscaler_policy_block_type_str,
                     **cert_meta,
                 )
+                logger.debug(f"Appending processed packet to list: {record_obj}")
+                yield record_obj
                 generated_records += 1
             except AttributeError as ae: # This should be less common with _get_pyshark_layer_attribute
                 logger.warning(f"Frame {packet_count}: Attribute error processing packet details: {ae}. Packet Layers: {[l.layer_name for l in packet.layers if hasattr(l, 'layer_name')]}", exc_info=False) # exc_info=False to reduce noise if frequent
@@ -1017,7 +1067,9 @@ def _parse_with_pyshark(
 def _parse_with_pcapkit(file_path: str, max_packets: Optional[int]) -> Generator[PcapRecord, None, None]:
     logger.info(f"Attempting to parse with PCAPKit (fallback): {file_path}")
     logger.warning("PCAPKit fallback: Most new fields are not implemented in this PcapKit path.")
-    if False: yield # This makes it a generator
+    logger.info("PCAPKit: Extraction stub -- no packets will be returned.")
+    if False:
+        yield  # This makes it a generator
     logger.info("PCAPKit: Processing complete (stubbed).")
     return # Or raise StopIteration implicitly
 
@@ -1194,6 +1246,14 @@ def iter_parsed_frames(
 
     original_path = isinstance(file_like, (str, os.PathLike, Path))
     path, cleanup = _ensure_path(file_like)
+    if not validate_pcap_file(str(path)):
+        if cleanup:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        logger.error("PCAP validation failed for %s", path)
+        raise CorruptPcapError(f"Invalid or corrupt PCAP file: {path}")
     total_estimate = _estimate_total_packets(path)
 
     # Auto workers detection (cap at 4)
@@ -1251,6 +1311,7 @@ def iter_parsed_frames(
     if record_generator is None:
         logger.error("No valid parser (PyShark or PCAPKit) was successfully initiated or yielded records.")
         cols = [f.name for f in PcapRecord.__dataclass_fields__.values()]
+        logger.debug("Yielding empty DataFrame because no records were generated")
         yield pd.DataFrame(columns=cols)
         if cleanup:
             os.unlink(path)
@@ -1262,7 +1323,10 @@ def iter_parsed_frames(
 
     try:
         for record in record_generator:
-            rows.append(asdict(record))
+            logger.debug(f"Processing raw packet/record: {record}")
+            processed_dict = asdict(record)
+            logger.debug(f"Appending processed packet to list: {processed_dict}")
+            rows.append(processed_dict)
             count += 1
             if on_progress and count >= next_callback:
                 on_progress(count, total_estimate)
@@ -1270,7 +1334,9 @@ def iter_parsed_frames(
             if len(rows) >= chunk_size:
                 if on_progress:
                     on_progress(count, total_estimate)
-                yield pd.DataFrame(rows)
+                df_chunk = pd.DataFrame(rows)
+                logger.debug(f"Yielding DataFrame chunk with shape: {df_chunk.shape}")
+                yield df_chunk
                 rows.clear()
             if max_packets is not None and count >= max_packets:
                 break
@@ -1284,9 +1350,12 @@ def iter_parsed_frames(
     if rows:
         if on_progress:
             on_progress(count, total_estimate)
-        yield pd.DataFrame(rows)
+        df_chunk = pd.DataFrame(rows)
+        logger.debug(f"Yielding final DataFrame chunk with shape: {df_chunk.shape}")
+        yield df_chunk
     elif count == 0:
         cols = [f.name for f in PcapRecord.__dataclass_fields__.values()]
+        logger.debug("Yielding empty DataFrame at end because no packets were processed")
         yield pd.DataFrame(columns=cols)
 
 
@@ -1305,6 +1374,9 @@ def parse_pcap_to_df(
     """
 
 
+    logger.info(f"Attempting to parse PCAP file: {file_like}")
+    logger.info(f"Effective _USE_PYSHARK: {_USE_PYSHARK}, _USE_PCAPKIT: {_USE_PCAPKIT}")
+
     chunks = list(
         iter_parsed_frames(
             file_like,
@@ -1314,10 +1386,16 @@ def parse_pcap_to_df(
             workers=workers,
         )
     )
+    total_packets = sum(len(c) for c in chunks)
+    logger.info(f"Total processed packets collected for DataFrame: {total_packets}")
+    if total_packets == 0:
+        logger.warning("No packets were processed into the final list. DataFrame will be empty.")
     if not chunks:
         cols = [f.name for f in PcapRecord.__dataclass_fields__.values()]
         return pd.DataFrame(columns=cols)
-    return pd.concat(chunks, ignore_index=True)
+    df = pd.concat(chunks, ignore_index=True)
+    logger.info(f"DataFrame created with shape: {df.shape if isinstance(df, pd.DataFrame) else 'Not a DataFrame'}")
+    return df
 
 
 class ParsedHandle:
@@ -1445,6 +1523,8 @@ def parse_pcap(
     on_progress: Callable[[int, Optional[int]], None] | None = None,
 ) -> ParsedHandle:
     """Parse ``file_like`` and return a handle to the parsed flows."""
+
+    logger.info(f"parse_pcap called with file_like: {file_like}")
 
     if output_uri is None:
         df = parse_pcap_to_df(
