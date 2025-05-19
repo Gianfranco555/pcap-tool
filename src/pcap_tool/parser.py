@@ -80,6 +80,7 @@ class PcapRecord:
     tcp_window_size: Optional[int] = None; tcp_options_mss: Optional[int] = None
     tcp_options_sack_permitted: Optional[bool] = None; tcp_options_window_scale: Optional[int] = None
     tcp_stream_index: Optional[int] = None
+    is_src_client: Optional[bool] = None
     tcp_analysis_retransmission_flags: list[str] = field(default_factory=list)
     tcp_analysis_duplicate_ack_flags: list[str] = field(default_factory=list)
     tcp_analysis_out_of_order_flags: list[str] = field(default_factory=list)
@@ -128,6 +129,7 @@ class PcapRecord:
         if self.quic_initial_packet_present is not None: final_chunk_info.append(f"QUIC_Initial:{self.quic_initial_packet_present}")
         if self.is_zscaler_ip is not None: final_chunk_info.append(f"ZscalerIP:{self.is_zscaler_ip}")
         if self.is_zpa_synthetic_ip is not None: final_chunk_info.append(f"ZPA_SynthIP:{self.is_zpa_synthetic_ip}")
+        if self.is_src_client is not None: final_chunk_info.append(f"SrcIsClient:{self.is_src_client}")
         if self.ssl_inspection_active is not None: final_chunk_info.append(f"SSL_Inspect:{self.ssl_inspection_active}")
         if self.zscaler_policy_block_type: final_chunk_info.append(f"ZS_Block:{self.zscaler_policy_block_type}")
         final_chunk_str = ", ".join(final_chunk_info)
@@ -310,6 +312,7 @@ def _parse_with_pyshark(
     logger.info(f"Starting PCAP parsing with PyShark for: {file_path}")
     generated_records = 0
     cap = None
+    flow_orientation: dict[Any, tuple[str | None, int | None]] = {}
     try:
         display_filter = None
         if start or slice_size:
@@ -396,6 +399,7 @@ def _parse_with_pyshark(
                 tcp_sequence_number, tcp_acknowledgment_number, tcp_window_size = None, None, None
                 tcp_options_mss, tcp_options_sack_permitted, tcp_options_window_scale = None, None, None
                 tcp_stream_index = None
+                is_src_client_val = None
                 tcp_analysis_retransmission_flags = []
                 tcp_analysis_duplicate_ack_flags = []
                 tcp_analysis_out_of_order_flags = []
@@ -557,6 +561,16 @@ def _parse_with_pyshark(
                     payload_len_str = _get_pyshark_layer_attribute(tcp_layer, 'len', frame_number)
                     payload_len_int = _safe_int(payload_len_str) if payload_len_str else 0
                     flow_key = _flow_history_key(source_ip, source_port, destination_ip, destination_port)
+
+                    orient_key = tcp_stream_index if tcp_stream_index is not None else flow_key
+                    orient = flow_orientation.get(orient_key)
+                    if orient is None and tcp_flags_syn and not tcp_flags_ack:
+                        orient = (source_ip, source_port)
+                        flow_orientation[orient_key] = orient
+                    if orient is not None:
+                        is_src_client_val = (
+                            source_ip == orient[0] and source_port == orient[1]
+                        )
 
 
                     if tcp_layer:
@@ -842,6 +856,7 @@ def _parse_with_pyshark(
                     tcp_options_sack_permitted=tcp_options_sack_permitted,
                     tcp_options_window_scale=tcp_options_window_scale,
                     tcp_stream_index=tcp_stream_index,
+                    is_src_client=is_src_client_val,
                     tcp_analysis_retransmission_flags=tcp_analysis_retransmission_flags,
                     tcp_analysis_duplicate_ack_flags=tcp_analysis_duplicate_ack_flags,
                     tcp_analysis_out_of_order_flags=tcp_analysis_out_of_order_flags,
