@@ -582,6 +582,7 @@ def _parse_with_pyshark(
                         )
                         yield record_obj
                         generated_records += 1
+
                     continue # Skip to next packet
 
                 transport_layer_obj = None
