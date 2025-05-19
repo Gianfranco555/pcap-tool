@@ -952,7 +952,8 @@ def _estimate_total_packets(path: Path) -> Optional[int]:
             out = subprocess.check_output(cmd, text=True)
             for line in out.splitlines():
                 if "Number of packets" in line:
-                    return int(line.split(":")[-1].strip())
+                    count_str = line.split(":", 1)[1].strip().replace(",", "")
+                    return int(count_str)
         except (subprocess.SubprocessError, FileNotFoundError) as exc:  # pragma: no cover - best effort only
             logger.debug("capinfos failed with %s: %s", cmd[0], exc)
 
