@@ -8,6 +8,7 @@ from .parser import (
 )
 from .pdf_report import generate_pdf_report
 from .summary import generate_summary_df, export_summary_excel
+from .utils import export_to_csv
 from .metrics.stats_collector import StatsCollector
 from .enrichment import Enricher
 from .analyze import PerformanceAnalyzer, ErrorSummarizer
@@ -22,6 +23,7 @@ __all__ = [
     "generate_pdf_report",
     "generate_summary_df",
     "export_summary_excel",
+    "export_to_csv",
     "StatsCollector",
     "Enricher",
     "PerformanceAnalyzer",

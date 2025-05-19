@@ -14,6 +14,7 @@ import streamlit as st
 
 from pcap_tool import parse_pcap, generate_pdf_report
 from pcap_tool.summary import generate_summary_df
+from pcap_tool.utils import export_to_csv
 from heuristics.engine import HeuristicEngine
 
 st.set_page_config(page_title="PCAP Analysis Tool")
@@ -30,6 +31,7 @@ if uploaded_file and uploaded_file.size > 5 * 1024 * 1024 * 1024:
 output_area = st.empty()
 df = None
 summary_df = None
+packet_df = None
 analysis_ran = False # From Codex branch
 
 if uploaded_file and st.button("Parse & Analyze"):
@@ -47,6 +49,7 @@ if uploaded_file and st.button("Parse & Analyze"):
 
         handle = parse_pcap(temp_file_path, on_progress=_on_progress)
         parsed_df = handle.as_dataframe()
+        packet_df = parsed_df
 
         progress.progress(1.0, text="Tagging flows…")
 
@@ -80,11 +83,13 @@ else:
 
 csv_data = b""
 summary_csv = b""
+raw_csv = b""
 pdf_data = b""
 summary_pdf = b""
 download_disabled = True
 pdf_disabled = True
 summary_pdf_disabled = True
+raw_download_disabled = True
 if df is not None and not df.empty:
     csv_data = df.to_csv(index=False).encode("utf-8")
     summary_csv = summary_df.to_csv(index=False).encode("utf-8")
@@ -96,6 +101,9 @@ if df is not None and not df.empty:
         summary_pdf_disabled = False
     except ImportError:
         st.warning("ReportLab not installed - PDF export disabled")
+if packet_df is not None and not packet_df.empty:
+    raw_csv = packet_df.to_csv(index=False).encode("utf-8")
+    raw_download_disabled = False
 
 st.download_button(
     "⬇️  Download Full CSV",
@@ -104,6 +112,13 @@ st.download_button(
     mime="text/csv",
 
     disabled=download_disabled,
+)
+st.download_button(
+    "⬇️  Download Packet CSV",
+    raw_csv,
+    file_name="pcap_packets.csv",
+    mime="text/csv",
+    disabled=raw_download_disabled,
 )
 st.download_button(
     "⬇️  Download Summary CSV",
@@ -124,6 +139,13 @@ st.download_button(
     file_name="report.pdf",
     disabled=pdf_disabled,
 )
+
+if df is not None and not df.empty and st.button("Export Tagged CSV to Server"):
+    export_to_csv(df, "tagged_flow_df.csv")
+    st.success("Saved tagged_flow_df.csv")
+if packet_df is not None and not packet_df.empty and st.button("Export Packet CSV to Server"):
+    export_to_csv(packet_df, "packet_df.csv")
+    st.success("Saved packet_df.csv")
 
 # Removed the duplicated block from phase4-tests that was just placeholders
 
