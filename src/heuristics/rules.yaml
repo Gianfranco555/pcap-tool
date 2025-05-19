@@ -8,6 +8,9 @@ target_column_map:
   zscaler_context_rules: "zscaler_specific_finding" # For Zscaler specific observations
   flow_error_type_rules: "flow_error_type"           # High level error category
   flow_error_details_rules: "flow_error_details"     # Human friendly error notes
+  security_flag_plaintext_http_rules: "security_flag_plaintext_http"  # Bool flag
+  security_flag_outdated_tls_version_rules: "security_flag_outdated_tls_version"  # String TLS version
+  security_flag_self_signed_cert_rules: "security_flag_self_signed_cert"  # Bool flag
 
 # 2. Define default values for these new columns.
 default_values:
@@ -17,6 +20,9 @@ default_values:
   zscaler_specific_finding: "N/A"
   flow_error_type: null
   flow_error_details: null
+  security_flag_plaintext_http: false
+  security_flag_outdated_tls_version: null
+  security_flag_self_signed_cert: false
 
 # 3. Define the rule sets. The keys here MUST match the keys in target_column_map.
 
@@ -351,4 +357,40 @@ flow_error_details_rules:
       - {field: "icmp_type", operator: "equals", value: 3}
       - {field: "icmp_code", operator: "equals", value: 1}
     stop_processing: true
+
+# ==============================================================================
+# Rule set for boolean plaintext HTTP flag
+# ==============================================================================
+security_flag_plaintext_http_rules:
+  - name: "Plain HTTP Flow"
+    output_value: true
+    conditions:
+      - {field: "destination_port", operator: "equals", value: 80}
+      - {field: "http_request_method", operator: "exists"}
+    stop_processing: false
+
+# ==============================================================================
+# Rule set for outdated TLS version flag
+# ==============================================================================
+security_flag_outdated_tls_version_rules:
+  - name: "TLS Version 1.0"
+    output_value_format: "{tls_effective_version}"
+    conditions:
+      - {field: "tls_effective_version", operator: "equals", value: "TLS 1.0"}
+    stop_processing: false
+  - name: "TLS Version 1.1"
+    output_value_format: "{tls_effective_version}"
+    conditions:
+      - {field: "tls_effective_version", operator: "equals", value: "TLS 1.1"}
+    stop_processing: false
+
+# ==============================================================================
+# Rule set for self-signed certificate flag
+# ==============================================================================
+security_flag_self_signed_cert_rules:
+  - name: "Self Signed TLS Certificate"
+    output_value: true
+    conditions:
+      - {field: "tls_cert_is_self_signed", operator: "equals", value: true}
+    stop_processing: false
 
