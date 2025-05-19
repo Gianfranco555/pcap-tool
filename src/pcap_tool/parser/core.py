@@ -20,9 +20,12 @@ from math import ceil
 from concurrent.futures import ProcessPoolExecutor
 from collections import defaultdict, deque
 
-from .exceptions import CorruptPcapError
-from .heuristics.errors import detect_packet_error
-from .models import PcapRecord, ParsedHandle
+from ..exceptions import CorruptPcapError
+from ..heuristics.errors import detect_packet_error
+from ..models import PcapRecord, ParsedHandle
+
+class ParserNotAvailable(RuntimeError):
+    """Raised when no parser backend is available."""
 
 logger = logging.getLogger(__name__)
 
