@@ -20,6 +20,22 @@ class FakeReader:
             return FakeCityRecord()
         raise AddressNotFoundError("not found")
 
+
+class FakeASNRecord:
+    def __init__(self):
+        self.autonomous_system_number = 12345
+        self.autonomous_system_organization = "TestOrg"
+
+
+class FakeASNReader:
+    def __init__(self, path):
+        self.path = path
+
+    def asn(self, ip):
+        if ip == "1.2.3.4":
+            return FakeASNRecord()
+        raise AddressNotFoundError("not found")
+
 geoip2_mod = types.ModuleType("geoip2")
 database_mod = types.ModuleType("geoip2.database")
 errors_mod = types.ModuleType("geoip2.errors")
@@ -37,7 +53,7 @@ sys.modules.setdefault("geoip2.database", database_mod)
 sys.modules.setdefault("geoip2.errors", errors_mod)
 
 import geoip2.database
-
+import pcap_tool.enrichment as enrichment_mod
 from pcap_tool.enrichment import Enricher
 
 
@@ -64,4 +80,26 @@ def test_enrich_ips_includes_geo(monkeypatch):
     enricher = Enricher(geoip_city_db_path="dummy.mmdb")
     info = enricher.enrich_ips(["1.2.3.4"])
     assert info["1.2.3.4"]["geo"]["country"] == "Testland"
+
+
+def test_get_asn_no_db():
+    enricher = Enricher()
+    assert enricher.get_asn("8.8.8.8") is None
+
+
+def test_get_asn_with_reader(monkeypatch):
+    monkeypatch.setattr(enrichment_mod, "Reader", FakeASNReader)
+    monkeypatch.setattr(geoip2.database, "Reader", FakeASNReader)
+    enricher = Enricher(geoip_asn_db_path="dummy.mmdb")
+    result = enricher.get_asn("1.2.3.4")
+    assert result == {"number": 12345, "organization": "TestOrg"}
+    assert enricher.get_asn("9.9.9.9") is None
+
+
+def test_enrich_ips_includes_asn(monkeypatch):
+    monkeypatch.setattr(enrichment_mod, "Reader", FakeASNReader)
+    monkeypatch.setattr(geoip2.database, "Reader", FakeASNReader)
+    enricher = Enricher(geoip_asn_db_path="dummy.mmdb")
+    info = enricher.enrich_ips(["1.2.3.4"])
+    assert info["1.2.3.4"]["asn"]["organization"] == "TestOrg"
 

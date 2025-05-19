@@ -93,7 +93,22 @@ class Enricher:
     def get_asn(self, ip: str) -> Optional[dict]:
         """Lookup ASN information for an IP address."""
         logger.debug("ASN lookup for: %s", ip)
-        return None  # Placeholder implementation
+        if not self.geoip_asn_reader or Reader is None:
+            return None
+
+        try:
+            resp = self.geoip_asn_reader.asn(ip)
+        except AddressNotFoundError:
+            logger.info("ASN address not found: %s", ip)
+            return None
+        except Exception:
+            logger.exception("ASN lookup failed for %s", ip)
+            return None
+
+        return {
+            "number": getattr(resp, "autonomous_system_number", None),
+            "organization": getattr(resp, "autonomous_system_organization", None),
+        }
 
     def get_rdns(self, ip: str) -> Optional[str]:
         """Perform reverse DNS lookup for an IP address."""
