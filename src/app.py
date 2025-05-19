@@ -7,15 +7,15 @@ Remaining TODOs (hook parser, hook heuristic engine, export logic)
 """
 
 import os
+import json
 import tempfile
 from pathlib import Path
 
+import pandas as pd
 import streamlit as st
+import altair as alt
 
-from pcap_tool import parse_pcap, generate_pdf_report
-from pcap_tool.summary import generate_summary_df
-from pcap_tool.utils import export_to_csv
-from heuristics.engine import HeuristicEngine
+from pcap_tool.pipeline_app import run_analysis
 
 st.set_page_config(page_title="PCAP Analysis Tool")
 st.title("PCAP Analysis Tool")
@@ -29,123 +29,145 @@ if uploaded_file and uploaded_file.size > 5 * 1024 * 1024 * 1024:
     uploaded_file = None
 
 output_area = st.empty()
-df = None
-summary_df = None
-packet_df = None
-analysis_ran = False # From Codex branch
+metrics_output = None
+tagged_flow_df = pd.DataFrame()
+text_summary = ""
+pdf_bytes = b""
+analysis_ran = False
 
 if uploaded_file and st.button("Parse & Analyze"):
     analysis_ran = True
-    progress = st.progress(0, text="Parsing PCAP…")
+    progress = st.progress(0, text="Processing PCAP…")
     temp_file_path = None
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pcapng") as tmp:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pcap") as tmp:
             tmp.write(uploaded_file.getvalue())
             temp_file_path = tmp.name
 
-        def _on_progress(count: int, total: int | None) -> None:
-            percent = count / total if total else 0.0
-            progress.progress(min(percent, 1.0), text=f"Parsing PCAP… {count}/{total or '?'}")
-
-        handle = parse_pcap(temp_file_path, on_progress=_on_progress)
-        parsed_df = handle.as_dataframe()
-        packet_df = parsed_df
-
-        progress.progress(1.0, text="Tagging flows…")
-
         rules_path = Path(__file__).resolve().parent / "heuristics" / "rules.yaml"
-        engine = HeuristicEngine(str(rules_path))
-        df = engine.tag_flows(parsed_df)
-        summary_df = generate_summary_df(df)
-        progress.empty()
+        metrics_output, tagged_flow_df, text_summary, pdf_bytes = run_analysis(Path(temp_file_path), rules_path)
+        progress.progress(1.0, text="Analysis complete")
     except Exception as exc:
         progress.empty()
         st.error(f"Error during analysis: {exc}")
-        df = None
+        metrics_output = None
+        tagged_flow_df = pd.DataFrame()
+        text_summary = ""
+        pdf_bytes = b""
     finally:
         if temp_file_path and os.path.exists(temp_file_path):
             os.unlink(temp_file_path)
+    progress.empty()
 
-if df is not None and not df.empty:
-    output_area.dataframe(df)
-    with st.expander("Preview Summary Report"):
-        st.dataframe(summary_df, use_container_width=True)
+if metrics_output is not None:
+    overview_tab, flows_tab, errors_tab, timeline_tab, ai_tab = st.tabs(
+        ["Overview", "Flows", "Errors & Security", "Timeline", "AI Summary"]
+    )
+
+    with overview_tab:
+        capture = metrics_output.get("capture_info", {})
+        perf = metrics_output.get("performance_metrics", {})
+        if capture:
+            st.subheader("Capture Info")
+            st.json(capture)
+        if perf:
+            st.subheader("Performance Metrics")
+            st.json(perf)
+
+        proto_counts = metrics_output.get("protocols", {})
+        if proto_counts:
+            proto_df = pd.DataFrame(
+                {"protocol": list(proto_counts.keys()), "count": list(proto_counts.values())}
+            )
+            chart = (
+                alt.Chart(proto_df)
+                .mark_arc()
+                .encode(theta="count", color="protocol")
+            )
+            st.altair_chart(chart, use_container_width=True)
+
+        port_counts = metrics_output.get("top_ports", {})
+        if port_counts:
+            port_data = []
+            for name, count in port_counts.items():
+                if "_" in name:
+                    proto, port = name.split("_", 1)
+                else:
+                    proto, port = "", name
+                port_data.append({"port": port, "protocol": proto.upper(), "count": count})
+            ports_df = pd.DataFrame(port_data)
+            chart = (
+                alt.Chart(ports_df)
+                .mark_bar()
+                .encode(x="port:N", y="count:Q", color="protocol:N")
+            )
+            st.altair_chart(chart, use_container_width=True)
+
+    with flows_tab:
+        st.dataframe(tagged_flow_df, use_container_width=True)
+        if "sparkline_bytes_c2s" in tagged_flow_df.columns:
+            st.caption("Sparkline columns represent per-second byte counts")
+
+    with errors_tab:
+        st.subheader("Error Summary")
+        st.json(metrics_output.get("error_summary", {}))
+        st.subheader("Security Findings")
+        st.json(metrics_output.get("security_findings", {}))
+
+    with timeline_tab:
+        timeline = metrics_output.get("timeline_data", [])
+        if timeline:
+            tl_df = pd.DataFrame(timeline)
+            area = (
+                alt.Chart(tl_df)
+                .mark_area(opacity=0.6)
+                .encode(x="timestamp:Q", y="bytes:Q")
+            )
+            spikes = tl_df[tl_df.get("spike")]
+            if not spikes.empty:
+                rules = alt.Chart(spikes).mark_rule(color="red").encode(x="timestamp:Q")
+                chart = area + rules
+            else:
+                chart = area
+            st.altair_chart(chart, use_container_width=True)
+
+    with ai_tab:
+        st.markdown(text_summary)
 else:
-    if uploaded_file is None: # From Codex branch
+    if uploaded_file is None:
         output_area.write("Upload a PCAP file to begin analysis.")
-    elif not analysis_ran: # From Codex branch
+    elif not analysis_ran:
         output_area.write("Click 'Parse & Analyze' to see results.")
-    else: # From Codex branch
+    else:
         output_area.write(
             "No analysis results to display. "
             "Check for errors above or try a different file."
         )
 
 csv_data = b""
-summary_csv = b""
-raw_csv = b""
 pdf_data = b""
-summary_pdf = b""
 download_disabled = True
 pdf_disabled = True
-summary_pdf_disabled = True
-raw_download_disabled = True
-if df is not None and not df.empty:
-    csv_data = df.to_csv(index=False).encode("utf-8")
-    summary_csv = summary_df.to_csv(index=False).encode("utf-8")
+if not tagged_flow_df.empty:
+    csv_data = tagged_flow_df.to_csv(index=False).encode("utf-8")
     download_disabled = False
-    try:
-        pdf_data = generate_pdf_report(df)
-        pdf_disabled = False
-        summary_pdf = generate_pdf_report(summary_df)
-        summary_pdf_disabled = False
-    except ImportError:
-        st.warning("ReportLab not installed - PDF export disabled")
-if packet_df is not None and not packet_df.empty:
-    raw_csv = packet_df.to_csv(index=False).encode("utf-8")
-    raw_download_disabled = False
+if pdf_bytes:
+    pdf_data = pdf_bytes
+    pdf_disabled = False
 
 st.download_button(
-    "⬇️  Download Full CSV",
+    "⬇️  Download Tagged Flows CSV",
     csv_data,
-    file_name="pcap_full.csv",
-    mime="text/csv",
-
-    disabled=download_disabled,
-)
-st.download_button(
-    "⬇️  Download Packet CSV",
-    raw_csv,
-    file_name="pcap_packets.csv",
-    mime="text/csv",
-    disabled=raw_download_disabled,
-)
-st.download_button(
-    "⬇️  Download Summary CSV",
-    summary_csv,
-    file_name="pcap_summary.csv",
+    file_name="tagged_flows.csv",
     mime="text/csv",
     disabled=download_disabled,
-)
-st.download_button(
-    "⬇️  Download Summary PDF",
-    summary_pdf,
-    file_name="pcap_summary.pdf",
-    disabled=summary_pdf_disabled,
 )
 st.download_button(
     "Download PDF Report",
     pdf_data,
-    file_name="report.pdf",
+    file_name="analysis_report.pdf",
     disabled=pdf_disabled,
 )
-
-if df is not None and not df.empty and st.button("Export Tagged CSV to Server"):
-    export_to_csv(df, "tagged_flow_df.csv")
-    st.success("Saved tagged_flow_df.csv")
-if packet_df is not None and not packet_df.empty and st.button("Export Packet CSV to Server"):
-    export_to_csv(packet_df, "packet_df.csv")
-    st.success("Saved packet_df.csv")
 
 # Removed the duplicated block from phase4-tests that was just placeholders
 
