@@ -5,6 +5,7 @@ from pcap_tool.pipeline_app import _derive_flow_id, _flow_cache_key
 from pcap_tool.metrics.flow_table import FlowTable
 
 
+
 def test_derive_flow_id_nan_ports():
     rec = PcapRecord(
         frame_number=1,
