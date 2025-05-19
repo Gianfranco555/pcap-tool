@@ -48,4 +48,3 @@ def compute_tcp_rtt_stats(flow_rtt_samples: List[float]) -> Dict[str, Optional[f
         "max": float(arr.max()),
         "samples": len(flow_rtt_samples),
     }
-
