@@ -88,6 +88,7 @@ class PcapRecord:
     tcp_analysis_window_flags: list[str] = field(default_factory=list)
     dup_ack_num: Optional[int] = None
     adv_window: Optional[int] = None
+    tcp_rtt_ms: Optional[float] = None
     tls_handshake_type: Optional[str] = None; tls_handshake_version: Optional[str] = None
     tls_record_version: Optional[str] = None; tls_cipher_suites_offered: Optional[List[str]] = None
     tls_cipher_suite_selected: Optional[str] = None; tls_alert_message_description: Optional[str] = None
@@ -335,6 +336,8 @@ def _parse_with_pyshark(
     generated_records = 0
     cap = None
     flow_orientation: dict[Any, tuple[str | None, int | None]] = {}
+    tcp_syn_times: dict[tuple[str, int, str, int, str], float] = {}
+    tcp_rtt_samples: defaultdict[tuple[str, int, str, int, str], list[float]] = defaultdict(list)
     try:
         display_filter = None
         if start or slice_size:
@@ -518,15 +521,20 @@ def _parse_with_pyshark(
                     # For non-IP/non-ARP, yield basic L2 info if available
                     if packet_count > generated_records:
                          yield PcapRecord(
-                            frame_number=frame_number, timestamp=timestamp,
-                            source_mac=source_mac, destination_mac=destination_mac,
-                            packet_length=packet_length_val, raw_packet_summary=raw_summary
+                            frame_number=frame_number,
+                            timestamp=timestamp,
+                            source_mac=source_mac,
+                            destination_mac=destination_mac,
+                            packet_length=packet_length_val,
+                            raw_packet_summary=raw_summary,
+                            tcp_rtt_ms=None,
                             # Other fields default to None
                          )
                          generated_records +=1
                     continue # Skip to next packet
 
                 transport_layer_obj = None
+                tcp_rtt_ms_sample = None
                 if protocol_l4 == "TCP" and hasattr(packet, 'tcp'):
                     transport_layer_obj = packet.tcp; tcp_layer = transport_layer_obj
                     tcp_flags_syn = _get_pyshark_layer_attribute(tcp_layer, 'flags_syn', frame_number, is_flag=True)
@@ -544,6 +552,13 @@ def _parse_with_pyshark(
                     ack_str = _get_pyshark_layer_attribute(tcp_layer, 'ack', frame_number)
                     if ack_str:
                         tcp_acknowledgment_number = _safe_int(ack_str)
+
+                    srcport_str = _get_pyshark_layer_attribute(tcp_layer, 'srcport', frame_number)
+                    if srcport_str:
+                        source_port = _safe_int(srcport_str)
+                    dstport_str = _get_pyshark_layer_attribute(tcp_layer, 'dstport', frame_number)
+                    if dstport_str:
+                        destination_port = _safe_int(dstport_str)
 
                     win_val_str = _get_pyshark_layer_attribute(tcp_layer, 'window_size_value', frame_number)
                     if win_val_str:
@@ -595,6 +610,48 @@ def _parse_with_pyshark(
                             source_ip == orient[0] and source_port == orient[1]
                         )
 
+                    tcp_rtt_ms_sample = None
+                    if tcp_flags_syn and not tcp_flags_ack:
+                        rtt_key = (
+                            source_ip or "",
+                            source_port or -1,
+                            destination_ip or "",
+                            destination_port or -1,
+                            "TCP",
+                        )
+                        if rtt_key not in tcp_syn_times:
+                            if (
+                                source_ip
+                                and destination_ip
+                                and source_port is not None
+                                and destination_port is not None
+                            ):
+                                tcp_syn_times[rtt_key] = timestamp
+                            else:
+                                logger.warning(
+                                    "Could not extract SYN data for RTT calculation for packet %s in flow %s",
+                                    frame_number,
+                                    rtt_key,
+                                )
+                    elif tcp_flags_syn and tcp_flags_ack:
+                        rtt_key_rev = (
+                            destination_ip or "",
+                            destination_port or -1,
+                            source_ip or "",
+                            source_port or -1,
+                            "TCP",
+                        )
+                        syn_ts = tcp_syn_times.get(rtt_key_rev)
+                        if syn_ts is not None:
+                            tcp_rtt_ms_sample = (timestamp - syn_ts) * 1000.0
+                            tcp_rtt_samples[rtt_key_rev].append(tcp_rtt_ms_sample)
+                            del tcp_syn_times[rtt_key_rev]
+                        else:
+                            logger.debug(
+                                "No matching SYN found for SYN-ACK packet %s in flow %s",
+                                frame_number,
+                                rtt_key_rev,
+                            )
 
                     if tcp_layer:
                         analysis_layer = getattr(tcp_layer, 'analysis', None)
@@ -901,6 +958,7 @@ def _parse_with_pyshark(
                     tcp_analysis_window_flags=tcp_analysis_window_flags,
                     dup_ack_num=dup_ack_num_val,
                     adv_window=adv_window_val,
+                    tcp_rtt_ms=tcp_rtt_ms_sample,
                     tls_handshake_type=tls_handshake_type_str,
                     tls_handshake_version=tls_handshake_version_str,
                     tls_record_version=tls_record_version_str,
