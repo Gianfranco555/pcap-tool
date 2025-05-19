@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Iterable, Optional
+from typing import Iterable, Optional, IO, Any
 import pandas as pd
 import logging
 
@@ -208,3 +208,30 @@ def generate_summary_df(full_df: pd.DataFrame) -> pd.DataFrame:
 
     result = pd.DataFrame(summaries, columns=_DEF_COLUMNS)
     return result.sort_values("start_time").reset_index(drop=True)
+
+
+def export_summary_excel(summary_df: pd.DataFrame, path: str | IO[Any] = "summary.xlsx") -> None:
+    """Write ``summary_df`` to an Excel file with a sheet per protocol.
+
+    Parameters
+    ----------
+    summary_df:
+        The DataFrame returned from :func:`generate_summary_df`.
+    path:
+        File path or file-like object to write the Excel workbook to.
+
+    Raises
+    ------
+    ImportError
+        If an Excel writer engine (``openpyxl`` or ``xlsxwriter``) is not available.
+    """
+
+    try:
+        with pd.ExcelWriter(path) as writer:  # type: ignore[list-item]
+            for proto, group in summary_df.groupby("protocol"):
+                sheet = str(proto)[:31] if str(proto) else "UNKNOWN"
+                group.to_excel(writer, sheet_name=sheet, index=False)
+    except ImportError as exc:  # pragma: no cover - optional dependency
+        raise ImportError(
+            "Excel export requires 'openpyxl' or 'xlsxwriter' to be installed"
+        ) from exc
