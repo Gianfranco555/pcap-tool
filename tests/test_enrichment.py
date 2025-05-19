@@ -52,8 +52,10 @@ sys.modules.setdefault("geoip2", geoip2_mod)
 sys.modules.setdefault("geoip2.database", database_mod)
 sys.modules.setdefault("geoip2.errors", errors_mod)
 
+import importlib
 import geoip2.database
 import pcap_tool.enrichment as enrichment_mod
+enrichment_mod = importlib.reload(enrichment_mod)
 from pcap_tool.enrichment import Enricher
 
 
