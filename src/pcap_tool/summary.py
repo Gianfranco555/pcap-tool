@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Iterable, Optional
 import pandas as pd
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 _PRIORITY_ORDER = ["Blocked", "Degraded", "Allowed", "Unknown"]
@@ -109,22 +112,34 @@ def generate_summary_df(full_df: pd.DataFrame) -> pd.DataFrame:
     if not pd.api.types.is_datetime64_any_dtype(df["timestamp"]):
         df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
 
+    if "is_src_client" not in df.columns:
+        logger.warning("'is_src_client' column not found. Defaulting to pd.NA.")
+        df["is_src_client"] = pd.NA
+
     length_col = "frame_len" if "frame_len" in df.columns else "packet_length"
 
     df["_src_ip"] = df.apply(
-        lambda r: r["source_ip"] if bool(r.get("is_src_client")) else r["destination_ip"],
+        lambda r: r["source_ip"]
+        if pd.notna(r.get("is_src_client")) and bool(r.get("is_src_client"))
+        else r["destination_ip"],
         axis=1,
     )
     df["_dest_ip"] = df.apply(
-        lambda r: r["destination_ip"] if bool(r.get("is_src_client")) else r["source_ip"],
+        lambda r: r["destination_ip"]
+        if pd.notna(r.get("is_src_client")) and bool(r.get("is_src_client"))
+        else r["source_ip"],
         axis=1,
     )
     df["_src_port"] = df.apply(
-        lambda r: r["source_port"] if bool(r.get("is_src_client")) else r["destination_port"],
+        lambda r: r["source_port"]
+        if pd.notna(r.get("is_src_client")) and bool(r.get("is_src_client"))
+        else r["destination_port"],
         axis=1,
     )
     df["_dest_port"] = df.apply(
-        lambda r: r["destination_port"] if bool(r.get("is_src_client")) else r["source_port"],
+        lambda r: r["destination_port"]
+        if pd.notna(r.get("is_src_client")) and bool(r.get("is_src_client"))
+        else r["source_port"],
         axis=1,
     )
 
@@ -136,8 +151,8 @@ def generate_summary_df(full_df: pd.DataFrame) -> pd.DataFrame:
         end_time = group["timestamp"].max()
         duration_ms = (end_time - start_time).total_seconds() * 1000
 
-        c2s_mask = group["is_src_client"] == True
-        s2c_mask = group["is_src_client"] == False
+        c2s_mask = group["is_src_client"].fillna(False) == True
+        s2c_mask = group["is_src_client"].fillna(False) == False
 
         pkts_c2s = int(c2s_mask.sum())
         pkts_s2c = int(s2c_mask.sum())
