@@ -97,10 +97,30 @@ service = guess_service(
     is_quic=is_quic,
 )
 ```
-
+Always check with ``pd.notna`` before calling ``int`` so that
+``guess_service`` receives ``None`` rather than ``NaN`` when port
+information is missing.
 This check is already performed in the repository; ensure
 similar safeguards are applied wherever integer fields are
 read from DataFrames.
+
+When summarizing counts from ``tagged_flow_df`` that may have
+``NaN`` values (for example after ``sum()`` or ``mean()`` operations),
+verify the result with ``pd.notna`` before converting to ``int``.
+
+```python
+flow_total = tagged_flow_df["some_count"].sum()
+metrics_json["total_error_flows"] = (
+    int(flow_total) if pd.notna(flow_total) else 0
+)
+```
+
+If many rows must be converted, call ``fillna`` before casting the
+entire column:
+
+```python
+tagged_flow_df["some_count"] = tagged_flow_df["some_count"].fillna(0).astype("int64")
+```
 
 ## D. Debugging Strategy
 
