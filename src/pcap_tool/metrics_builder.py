@@ -63,7 +63,13 @@ class MetricsBuilder:
         packet_df_for_enrich_detail: pd.DataFrame,
         tagged_flow_df: pd.DataFrame,
     ) -> Dict[str, Any]:
-        """Return aggregated metrics in the TARGET_SCHEMA format."""
+        """Return aggregated metrics in the TARGET_SCHEMA format.
+
+        Many columns in ``tagged_flow_df`` are created from pandas
+        aggregations and may have ``NaN`` when no data is present. Before
+        converting those values to ``int`` for the metrics JSON, verify them
+        with ``pd.notna`` and supply a default such as ``0`` when missing.
+        """
 
         logger.debug("Building metrics dictionary")
         metrics: Dict[str, Any] = {
@@ -137,7 +143,8 @@ class MetricsBuilder:
                 )
             entry = service_overview.setdefault(service, {"flow_count": 0, "bytes": 0})
             entry["flow_count"] += 1
-            entry["bytes"] += int(row.get("bytes_total", 0))
+            bytes_val = row.get("bytes_total")
+            entry["bytes"] += int(bytes_val) if pd.notna(bytes_val) else 0
         metrics["service_overview"] = service_overview
 
         # Error summary

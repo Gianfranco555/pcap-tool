@@ -24,7 +24,13 @@ def guess_service(
     rdns: Optional[str] = None,
     is_quic: bool = False,
 ) -> str:
-    """Return a human friendly service label for the given connection info."""
+    """Return a human friendly service label for the given connection info.
+
+    The ``port`` parameter accepts ``None`` so callers can safely convert
+    values from ``pandas`` objects using ``int(value) if pd.notna(value) else
+    None``. This avoids ``int(NaN)`` errors when ``destination_port`` columns
+    contain missing data.
+    """
 
     # 1. Explicit host information from SNI or HTTP Host header
     if sni:
