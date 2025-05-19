@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Iterable, Optional, IO, Any
 import pandas as pd
 from pcap_tool.logging import get_logger
+from pcap_tool.utils import coalesce
 
 logger = get_logger(__name__)
 
@@ -151,15 +152,15 @@ def generate_summary_df(full_df: pd.DataFrame) -> pd.DataFrame:
         end_time = group["timestamp"].max()
         duration_ms = (end_time - start_time).total_seconds() * 1000
 
-        c2s_mask = group["is_src_client"].fillna(False) == True
-        s2c_mask = group["is_src_client"].fillna(False) == False
+        c2s_mask = coalesce(group["is_src_client"], False) == True
+        s2c_mask = coalesce(group["is_src_client"], False) == False
 
         pkts_c2s = int(c2s_mask.sum())
         pkts_s2c = int(s2c_mask.sum())
         pkts_total = pkts_c2s + pkts_s2c
 
-        bytes_c2s = group.loc[c2s_mask, length_col].fillna(0).sum()
-        bytes_s2c = group.loc[s2c_mask, length_col].fillna(0).sum()
+        bytes_c2s = coalesce(group.loc[c2s_mask, length_col], 0).sum()
+        bytes_s2c = coalesce(group.loc[s2c_mask, length_col], 0).sum()
         bytes_total = bytes_c2s + bytes_s2c
 
         flow_disp = _priority_pick(group.get("flow_disposition"))

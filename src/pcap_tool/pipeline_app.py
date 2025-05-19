@@ -22,7 +22,7 @@ from .metrics_builder import MetricsBuilder
 from heuristics.engine import HeuristicEngine
 from llm_summarizer import LLMSummarizer
 from .pdf_report import generate_pdf_report
-from .utils import safe_int_or_default
+from .utils import safe_int, safe_int_or_default
 
 
 def _derive_flow_id(rec: PcapRecord) -> Tuple[str, str, int, int, str]:
@@ -158,11 +158,9 @@ def run_analysis(pcap_path: Path, rules_path: Path) -> Tuple[dict, pd.DataFrame,
 
     for col in int_cols_to_clean:
         if col in packet_df.columns:
-            if packet_df[col].isnull().any():
-                packet_df[col] = packet_df[col].fillna(
-                    fill_values_for_int_cols.get(col, 0)
-                )
-            packet_df[col] = packet_df[col].astype("int64")
+            packet_df[col] = safe_int(
+                packet_df[col], fill_values_for_int_cols.get(col, 0)
+            )
 
     flow_summary_df, _ = flow_table.get_summary_df()
     tagged_flow_df = heuristic_engine.tag_flows(flow_summary_df)
