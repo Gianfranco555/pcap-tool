@@ -6,6 +6,8 @@ target_column_map:
   traffic_type_rules: "traffic_type_guess"         # To make a guess about the type of traffic.
   security_observation_rules: "security_observation" # To flag potential security issues.
   zscaler_context_rules: "zscaler_specific_finding" # For Zscaler specific observations
+  flow_error_type_rules: "flow_error_type"           # High level error category
+  flow_error_details_rules: "flow_error_details"     # Human friendly error notes
 
 # 2. Define default values for these new columns.
 default_values:
@@ -13,6 +15,8 @@ default_values:
   traffic_type_guess: "Unknown"
   security_observation: "None"
   zscaler_specific_finding: "N/A"
+  flow_error_type: null
+  flow_error_details: null
 
 # 3. Define the rule sets. The keys here MUST match the keys in target_column_map.
 
@@ -298,3 +302,53 @@ zscaler_context_rules:
       - {field: "is_zscaler_ip", operator: "equals", value: true}
       - {field: "is_zpa_synthetic_ip", operator: "equals", value: false} # Avoid double-tagging
     stop_processing: false
+
+# ==============================================================================
+# Rule set for error tagging columns
+# ==============================================================================
+flow_error_type_rules:
+  - name: "TCP Reset"
+    output_value: "TCP_RESET"
+    conditions:
+      - {field: "protocol", operator: "equals", value: "TCP"}
+      - {field: "tcp_flags_rst", operator: "equals", value: true}
+    stop_processing: true
+
+  - name: "TLS Fatal Alert"
+    output_value_format: "TLS_FATAL_{tls_alert_message_description}"
+    conditions:
+      - {field: "tls_alert_level", operator: "equals", value: "fatal"}
+      - {field: "tls_alert_message_description", operator: "exists"}
+    stop_processing: true
+
+  - name: "ICMP Host Unreachable"
+    output_value: "ICMP_DEST_UNREACHABLE_HOST"
+    conditions:
+      - {field: "protocol", operator: "in", value: ["ICMP", "ICMPv6"]}
+      - {field: "icmp_type", operator: "equals", value: 3}
+      - {field: "icmp_code", operator: "equals", value: 1}
+    stop_processing: true
+
+flow_error_details_rules:
+  - name: "RST Source"
+    output_value_format: "Source: {source_ip}"
+    conditions:
+      - {field: "protocol", operator: "equals", value: "TCP"}
+      - {field: "tcp_flags_rst", operator: "equals", value: true}
+    stop_processing: true
+
+  - name: "TLS Alert Description"
+    output_value_format: "{tls_alert_message_description}"
+    conditions:
+      - {field: "tls_alert_level", operator: "equals", value: "fatal"}
+      - {field: "tls_alert_message_description", operator: "exists"}
+    stop_processing: true
+
+  - name: "ICMP Unreachable Source"
+    output_value_format: "Source: {source_ip}"
+    conditions:
+      - {field: "protocol", operator: "in", value: ["ICMP", "ICMPv6"]}
+      - {field: "icmp_type", operator: "equals", value: 3}
+      - {field: "icmp_code", operator: "equals", value: 1}
+    stop_processing: true
+
