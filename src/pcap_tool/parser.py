@@ -121,6 +121,7 @@ class PcapRecord:
     tls_record_version: Optional[str] = None; tls_cipher_suites_offered: Optional[List[str]] = None
     tls_cipher_suite_selected: Optional[str] = None; tls_alert_message_description: Optional[str] = None
     tls_alert_level: Optional[str] = None
+    tls_effective_version: Optional[str] = None
     # ── TLS certificate metadata ─────────────────────────────────────────
     tls_cert_subject_cn: Optional[str] = None
     tls_cert_san_dns: Optional[List[str]] = None   # list of DNS SANs
@@ -476,6 +477,7 @@ def _parse_with_pyshark(
                 tls_handshake_type_str, tls_handshake_version_str, tls_record_version_str = None, None, None
                 tls_cipher_suites_offered_list, tls_cipher_suite_selected_str = None, None
                 tls_alert_description_str, tls_alert_level_str = None, None
+                tls_effective_version_str = None
                 dns_query_name_str, dns_query_type_str, dns_response_code_str = None, None, None
                 dns_response_addresses_list, dns_response_cname_target_str = None, None
                 http_request_method_str, http_request_uri_str, http_request_host_header_str = None, None, None
@@ -793,29 +795,57 @@ def _parse_with_pyshark(
                         logger.debug(f"Frame {frame_number}: UDP/443 with no QUIC fields")
 
                 if hasattr(packet, 'tls'):
-                    sni = _extract_sni_pyshark(packet) # SNI extraction uses its own logic
+                    sni = _extract_sni_pyshark(packet)  # SNI extraction uses its own logic
                     tls_layer = packet.tls
-                    raw_rec_ver = _get_pyshark_layer_attribute(tls_layer, 'version', frame_number)
-                    if raw_rec_ver: tls_record_version_str = TLS_VERSION_MAP.get(str(raw_rec_ver).lower(), str(raw_rec_ver))
+                    raw_rec_ver = _get_pyshark_layer_attribute(tls_layer, 'record_version', frame_number)
+                    if raw_rec_ver:
+                        tls_record_version_str = TLS_VERSION_MAP.get(str(raw_rec_ver).lower(), str(raw_rec_ver))
 
-                    if hasattr(tls_layer, 'handshake'):
-                        handshake_layer = tls_layer.handshake
-                        hs_type_val = _get_pyshark_layer_attribute(handshake_layer, 'type', frame_number)
-                        if hs_type_val: tls_handshake_type_str = TLS_HANDSHAKE_TYPE_MAP.get(str(hs_type_val), str(hs_type_val))
+                    hs_type_val = _get_pyshark_layer_attribute(tls_layer, 'handshake_type', frame_number)
+                    if hs_type_val is not None:
+                        tls_handshake_type_str = TLS_HANDSHAKE_TYPE_MAP.get(str(hs_type_val), str(hs_type_val))
 
-                        hs_ver_val = _get_pyshark_layer_attribute(handshake_layer, 'version', frame_number)
-                        if hs_ver_val: tls_handshake_version_str = TLS_VERSION_MAP.get(str(hs_ver_val).lower(), str(hs_ver_val))
+                    hs_ver_val = _get_pyshark_layer_attribute(tls_layer, 'handshake_version', frame_number)
+                    if hs_ver_val is not None:
+                        tls_handshake_version_str = TLS_VERSION_MAP.get(str(hs_ver_val).lower(), str(hs_ver_val))
 
-                        if tls_handshake_type_str == "ClientHello" and hasattr(handshake_layer, 'ciphersuites'):
-                            raw_suites = getattr(handshake_layer, 'ciphersuites') # Direct access for complex field
-                            if isinstance(raw_suites, str): tls_cipher_suites_offered_list = [s.strip() for s in raw_suites.split(',')]
-                            elif isinstance(raw_suites, list): tls_cipher_suites_offered_list = [str(s.show) for s in raw_suites] # .show for Field objects
-                            else: tls_cipher_suites_offered_list = [str(raw_suites)]
+                    # Supported or selected version fields vary across tshark versions
+                    supp_ver_val = None
+                    for attr in (
+                        'handshake_extensions_supported_version',
+                        'handshake_supported_version',
+                        'handshake_supported_versions',
+                    ):
+                        if hasattr(tls_layer, attr):
+                            supp_ver_val = getattr(tls_layer, attr)
+                            break
+                    if supp_ver_val is not None:
+                        if isinstance(supp_ver_val, list):
+                            ver_token = supp_ver_val[0] if supp_ver_val else None
+                        else:
+                            ver_token = supp_ver_val
+                        if ver_token is not None:
+                            tls_handshake_version_str = TLS_VERSION_MAP.get(str(ver_token).lower(), str(ver_token))
 
-                        if tls_handshake_type_str == "ServerHello" and hasattr(handshake_layer, 'ciphersuite'):
-                            # ciphersuite field might be a Field object, convert to string
-                            raw_cs = getattr(handshake_layer, 'ciphersuite')
-                            tls_cipher_suite_selected_str = str(raw_cs.show) if hasattr(raw_cs, 'show') else str(raw_cs)
+                    if tls_handshake_type_str == "ClientHello" and hasattr(tls_layer, 'handshake_ciphersuites'):
+                        raw_suites = getattr(tls_layer, 'handshake_ciphersuites')
+                        if isinstance(raw_suites, str):
+                            tls_cipher_suites_offered_list = [s.strip() for s in raw_suites.split(',')]
+                        elif isinstance(raw_suites, list):
+                            tls_cipher_suites_offered_list = [str(s.show) for s in raw_suites]
+                        else:
+                            tls_cipher_suites_offered_list = [str(raw_suites)]
+
+                    if tls_handshake_type_str == "ServerHello" and hasattr(tls_layer, 'handshake_ciphersuite'):
+                        raw_cs = getattr(tls_layer, 'handshake_ciphersuite')
+                        tls_cipher_suite_selected_str = str(raw_cs.show) if hasattr(raw_cs, 'show') else str(raw_cs)
+
+                    if tls_handshake_version_str or tls_record_version_str:
+                        tls_effective_version_str = tls_handshake_version_str or tls_record_version_str
+                    else:
+                        logger.warning(
+                            "Could not extract TLS version from packet %s", frame_number
+                        )
 
 
                     if hasattr(tls_layer, 'record_content_type') and str(_get_pyshark_layer_attribute(tls_layer, 'record_content_type', frame_number)) == '21': # Alert
@@ -1010,6 +1040,7 @@ def _parse_with_pyshark(
                     tls_handshake_type=tls_handshake_type_str,
                     tls_handshake_version=tls_handshake_version_str,
                     tls_record_version=tls_record_version_str,
+                    tls_effective_version=tls_effective_version_str,
                     tls_cipher_suites_offered=tls_cipher_suites_offered_list,
                     tls_cipher_suite_selected=tls_cipher_suite_selected_str,
                     tls_alert_message_description=tls_alert_description_str,

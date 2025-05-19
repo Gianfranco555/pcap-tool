@@ -1,6 +1,30 @@
+
+"""Placeholder utilities for heuristic metrics aggregation."""
+
+from collections import defaultdict
+from typing import Iterable, Mapping, Dict, Any
+
+from ..parser import PcapRecord
+
+
+def count_tls_versions(records: Iterable[Any]) -> Dict[str, int]:
+    """Return counts of observed TLS versions."""
+    counts: defaultdict[str, int] = defaultdict(int)
+    for rec in records:
+        version = None
+        if isinstance(rec, PcapRecord):
+            version = rec.tls_effective_version
+        elif isinstance(rec, Mapping):
+            version = rec.get("tls_effective_version")
+        else:
+            version = getattr(rec, "tls_effective_version", None)
+        if version:
+            counts[str(version)] += 1
+    return dict(counts)
+
 from __future__ import annotations
 
-from typing import List, Dict, Optional
+from typing import List, Optional
 import numpy as np
 
 
@@ -24,3 +48,4 @@ def compute_tcp_rtt_stats(flow_rtt_samples: List[float]) -> Dict[str, Optional[f
         "max": float(arr.max()),
         "samples": len(flow_rtt_samples),
     }
+
