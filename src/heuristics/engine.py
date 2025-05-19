@@ -1,12 +1,14 @@
 import yaml
 import pandas as pd
-import ipaddress # For CIDR checks
-import re # For regex checks
+import ipaddress  # For CIDR checks
+import re  # For regex checks
 import logging
 from typing import List, Dict, Any, Optional, TypedDict, Union, Callable, Tuple
 import argparse
 import os
 import sys
+
+from pcap_tool.exceptions import RuleFileError
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -125,6 +127,18 @@ class HeuristicEngine:
             key: self.rules_config.get(key, []) for key in self.target_column_map.keys()
         }
 
+        # Flow outcome rules are handled separately
+        raw_outcome_rules = self.rules_config.get("flow_outcome_rules", [])
+        if not isinstance(raw_outcome_rules, list):
+            logger.error("'flow_outcome_rules' must be a list if present.")
+            raise RuleFileError("'flow_outcome_rules' must be a list if present.")
+        self.flow_outcome_rules: List[Dict[str, Any]] = []
+        for rule in raw_outcome_rules:
+            if not isinstance(rule, dict):
+                logger.error("Each entry in 'flow_outcome_rules' must be a mapping.")
+                raise RuleFileError("Invalid rule in 'flow_outcome_rules'")
+            self.flow_outcome_rules.append(rule)
+
         if not self.target_column_map:
             raise ValueError("Rules YAML must contain a 'target_column_map' section.")
         if not self.default_values and self.target_column_map:
@@ -158,17 +172,38 @@ class HeuristicEngine:
 
     def _load_rules_config_file(self, rules_path: str) -> Dict[str, Any]:
         try:
-            with open(rules_path, 'r') as f:
+            with open(rules_path, "r") as f:
                 config = yaml.safe_load(f)
-                if not isinstance(config, dict):
-                    raise ValueError("Rules YAML root must be a dictionary.")
-                return config
-        except FileNotFoundError:
+        except FileNotFoundError as e:
             logger.error(f"Rules file not found at {rules_path}")
-            raise
+            raise RuleFileError(f"Rules file not found at {rules_path}") from e
         except yaml.YAMLError as e:
             logger.error(f"Error parsing YAML rules from {rules_path}: {e}")
-            raise ValueError(f"Error parsing YAML rules from {rules_path}: {e}")
+            raise RuleFileError(
+                f"Error parsing YAML rules from {rules_path}: {e}"
+            ) from e
+
+        if not isinstance(config, dict):
+            logger.error("Rules YAML root must be a dictionary.")
+            raise RuleFileError("Rules YAML root must be a dictionary.")
+
+        # Basic structural validation for rule lists
+        for key, value in config.items():
+            if key in {"target_column_map", "default_values"}:
+                continue
+            if not isinstance(value, list):
+                logger.error(f"Rules for '{key}' must be a list.")
+                raise RuleFileError(f"Rules for '{key}' must be a list.")
+            for idx, item in enumerate(value):
+                if not isinstance(item, dict):
+                    logger.error(
+                        f"Rule #{idx} in '{key}' must be a mapping, got {type(item)}"
+                    )
+                    raise RuleFileError(
+                        f"Rule #{idx} in '{key}' must be a mapping"
+                    )
+
+        return config
 
     def _evaluate_conditions_list(self, df: pd.DataFrame, conditions: List[RuleCondition], logic_type: str) -> pd.Series:
         """Evaluates a list of conditions with specified logic (AND or OR)."""
@@ -239,6 +274,12 @@ class HeuristicEngine:
 
         return final_mask
 
+    def _row_matches_rule(self, row: pd.Series, rule: Dict[str, Any]) -> bool:
+        """Return True if ``row`` satisfies ``rule`` conditions."""
+        df_row = pd.DataFrame([row])
+        mask = self._build_mask_for_rule(df_row, rule)
+        return bool(mask.iloc[0])
+
 
     def _apply_output_value(self, df: pd.DataFrame, mask: pd.Series,
                             target_column: str, rule: Rule) -> None:
@@ -301,6 +342,10 @@ class HeuristicEngine:
             df[target_column] = default_val
             locked_rows_by_column[target_column] = pd.Series([False] * len(df), index=df.index)
 
+        # Flow outcome default column
+        flow_outcome_default = self.default_values.get("flow_outcome", "Analyzed")
+        df["flow_outcome"] = flow_outcome_default
+
         for rule_group_key, rule_set in self.rule_sets.items():
             target_column = self.target_column_map.get(rule_group_key)
             if not target_column:
@@ -330,6 +375,19 @@ class HeuristicEngine:
                     # If this rule has "stop_processing: true", lock these rows for this target_column
                     if rule_config.get("stop_processing") is True:
                         locked_rows.loc[effective_mask] = True # Update the locked_rows series
+
+        # Apply flow outcome rules row by row for resilience
+        if self.flow_outcome_rules:
+            for idx, row in df.iterrows():
+                try:
+                    for rule in self.flow_outcome_rules:
+                        if self._row_matches_rule(row, rule):
+                            df.at[idx, "flow_outcome"] = rule.get("value", "")
+                            break
+                except Exception as e:
+                    flow_id = row.get("flow_id", idx)
+                    logger.error(f"Rule logic error for flow {flow_id}: {e}")
+                    df.at[idx, "flow_outcome"] = "engine_error"
 
         for target_column in self.target_column_map.values():
             if target_column in df.columns and df[target_column].isna().any():

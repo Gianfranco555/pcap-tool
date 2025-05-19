@@ -23,6 +23,7 @@ default_values:
   security_flag_plaintext_http: false
   security_flag_outdated_tls_version: null
   security_flag_self_signed_cert: false
+  flow_outcome: "Analyzed"
 
 # 3. Define the rule sets. The keys here MUST match the keys in target_column_map.
 
@@ -393,4 +394,27 @@ security_flag_self_signed_cert_rules:
     conditions:
       - {field: "tls_cert_is_self_signed", operator: "equals", value: true}
     stop_processing: false
+
+# ==============================================================================
+# Rule set for detailed flow outcome tagging
+# ==============================================================================
+flow_outcome_rules:
+  - name: blocked_dns_nxdomain
+    value: "Blocked_DNS_NXDOMAIN"
+    conditions:
+      - field: dns_rcode_name
+        operator: equals
+        value: "NXDOMAIN"
+  - name: reset_by_server_after_tls_handshake
+    value: "Degraded_Reset_After_TLS"
+    conditions:
+      - field: packet_error_reason
+        operator: contains
+        value: "TCP_RST_Received"
+      - field: tcp_initiator
+        operator: equals
+        value: "client"
+      - field: tls_handshake_successful
+        operator: equals
+        value: true
 

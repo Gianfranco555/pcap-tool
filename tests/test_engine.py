@@ -1,7 +1,12 @@
-import pandas as pd
-import yaml
+import logging
 from pathlib import Path
+
+import pandas as pd
+import pytest
+import yaml
+
 from heuristics.engine import HeuristicEngine
+from pcap_tool.exceptions import RuleFileError
 
 
 def build_engine(rule, tmp_path):
@@ -184,3 +189,53 @@ def test_stop_processing(tmp_path):
     df = pd.DataFrame([{"protocol": "TCP"}])
     result = engine.tag_flows(df)
     assert result["result"].iloc[0] == "FIRST"
+
+
+def _minimal_rules_with_outcome(outcome_rules):
+    return {
+        "target_column_map": {"dummy_rules": "dummy"},
+        "default_values": {"dummy": "", "flow_outcome": "Analyzed"},
+        "dummy_rules": [],
+        "flow_outcome_rules": outcome_rules,
+    }
+
+
+def test_flow_outcome_rules_basic(tmp_path):
+    rules = _minimal_rules_with_outcome([
+        {
+            "name": "nx",
+            "value": "NX",
+            "conditions": [
+                {"field": "dns_rcode_name", "operator": "equals", "value": "NXDOMAIN"}
+            ],
+        }
+    ])
+    path = tmp_path / "rules.yaml"
+    path.write_text(yaml.safe_dump(rules))
+    engine = HeuristicEngine(str(path))
+    df = pd.DataFrame([
+        {"flow_id": 1, "dns_rcode_name": "NXDOMAIN"},
+        {"flow_id": 2, "dns_rcode_name": "NOERROR"},
+    ])
+    result = engine.tag_flows(df)
+    assert result["flow_outcome"].tolist() == ["NX", "Analyzed"]
+
+
+def test_flow_outcome_rule_error_handling(tmp_path):
+    rules = _minimal_rules_with_outcome([
+        {"name": "bad", "value": "BAD", "conditions": "oops"}
+    ])
+    path = tmp_path / "rules.yaml"
+    path.write_text(yaml.safe_dump(rules))
+    engine = HeuristicEngine(str(path))
+    df = pd.DataFrame([{"flow_id": 1}])
+    result = engine.tag_flows(df)
+    assert result["flow_outcome"].iloc[0] == "engine_error"
+
+
+def test_rulefile_error_on_bad_yaml(tmp_path):
+    bad_yaml_path = tmp_path / "rules.yaml"
+    bad_yaml_path.write_text(":- bad")
+    with pytest.raises(RuleFileError):
+        HeuristicEngine(str(bad_yaml_path))
+
