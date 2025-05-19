@@ -116,6 +116,7 @@ class PcapRecord:
     gre_protocol: Optional[str] = None
     esp_spi: Optional[str] = None
     quic_initial_packet_present: Optional[bool] = None
+    is_quic: Optional[bool] = None
     is_zscaler_ip: Optional[bool] = None
     is_zpa_synthetic_ip: Optional[bool] = None
     ssl_inspection_active: Optional[bool] = None
@@ -127,6 +128,7 @@ class PcapRecord:
         if self.gre_protocol: final_chunk_info.append(f"GRE_Proto:{self.gre_protocol}")
         if self.esp_spi: final_chunk_info.append(f"ESP_SPI:{self.esp_spi}")
         if self.quic_initial_packet_present is not None: final_chunk_info.append(f"QUIC_Initial:{self.quic_initial_packet_present}")
+        if self.is_quic is not None: final_chunk_info.append(f"IsQUIC:{self.is_quic}")
         if self.is_zscaler_ip is not None: final_chunk_info.append(f"ZscalerIP:{self.is_zscaler_ip}")
         if self.is_zpa_synthetic_ip is not None: final_chunk_info.append(f"ZPA_SynthIP:{self.is_zpa_synthetic_ip}")
         if self.is_src_client is not None: final_chunk_info.append(f"SrcIsClient:{self.is_src_client}")
@@ -418,6 +420,7 @@ def _parse_with_pyshark(
                 dhcp_message_type_str = None
                 gre_protocol_str, esp_spi_str = None, None
                 quic_initial_packet = None
+                is_quic_flag = None
                 is_zscaler_ip_flag, is_zpa_synthetic_ip_flag = None, None # Will become False if IPs exist and don't match
                 ssl_inspection_active_flag = None
                 zscaler_policy_block_type_str = None
@@ -656,6 +659,14 @@ def _parse_with_pyshark(
                     if dstport_str:
                         destination_port = _safe_int(dstport_str)
 
+                if protocol_l4 == "UDP" and destination_port == 443:
+                    if hasattr(packet, 'quic'):
+                        is_quic_flag = True
+                        logger.debug(f"Frame {frame_number}: UDP/443 with QUIC layer detected")
+                    else:
+                        is_quic_flag = False
+                        logger.debug(f"Frame {frame_number}: UDP/443 with no QUIC fields")
+
                 if hasattr(packet, 'tls'):
                     sni = _extract_sni_pyshark(packet) # SNI extraction uses its own logic
                     tls_layer = packet.tls
@@ -802,16 +813,23 @@ def _parse_with_pyshark(
 
                 if hasattr(packet, 'quic'):
                     quic_layer = packet.quic
+                    quic_log_fields = []
                     if hasattr(quic_layer, 'version'):
+                        quic_log_fields.append(f"version={getattr(quic_layer, 'version')}")
                         # Check for long header type '0' (Initial)
                         long_packet_type = _get_pyshark_layer_attribute(quic_layer, 'long_packet_type', frame_number)
-                        if str(long_packet_type) == '0':
-                            quic_initial_packet = True
+                        if long_packet_type is not None:
+                            quic_log_fields.append(f"long_packet_type={long_packet_type}")
+                            if str(long_packet_type) == '0':
+                                quic_initial_packet = True
                         # Fallback: Check header_form '1' (Long header) if long_packet_type not definitive
                         elif _get_pyshark_layer_attribute(quic_layer, 'header_form', frame_number, is_flag=True): # '1' is Long Header
                             quic_initial_packet = True # Simplified, could be other long header types
+                            quic_log_fields.append('header_form=1')
                         else:
                             quic_initial_packet = False # It's QUIC, has version, but not clearly Initial or Long Header
+                    if quic_log_fields:
+                        logger.debug(f"Frame {frame_number}: QUIC fields {quic_log_fields}")
 
                 # Zscaler Contextual Variables
                 # These are set regardless of whether IPs were found or not; _check_ip_in_ranges handles None IPs
@@ -893,6 +911,7 @@ def _parse_with_pyshark(
                     gre_protocol=gre_protocol_str,
                     esp_spi=esp_spi_str,
                     quic_initial_packet_present=quic_initial_packet,
+                    is_quic=is_quic_flag,
                     is_zscaler_ip=is_zscaler_ip_flag,
                     is_zpa_synthetic_ip=is_zpa_synthetic_ip_flag,
                     ssl_inspection_active=ssl_inspection_active_flag,
