@@ -111,6 +111,56 @@ def run_analysis(pcap_path: Path, rules_path: Path) -> Tuple[dict, pd.DataFrame,
 
     packet_df = pd.DataFrame([asdict(r) for r in packet_records])
 
+    int_cols_to_clean = [
+        "source_port",
+        "destination_port",
+        "packet_length",
+        "frame_number",
+        "tcp_sequence_number",
+        "tcp_acknowledgment_number",
+        "tcp_window_size",
+        "tcp_options_mss",
+        "tcp_options_window_scale",
+        "icmp_type",
+        "icmp_code",
+        "ip_ttl",
+        "dscp_value",
+        "arp_opcode",
+        "tcp_stream_index",
+        "dup_ack_num",
+        "adv_window",
+        "icmp_fragmentation_needed_original_mtu",
+    ]
+
+    fill_values_for_int_cols = {
+        "source_port": -1,
+        "destination_port": -1,
+        "packet_length": 0,
+        "frame_number": -1,
+        "tcp_sequence_number": -1,
+        "tcp_acknowledgment_number": -1,
+        "tcp_window_size": 0,
+        "tcp_options_mss": 0,
+        "tcp_options_window_scale": 0,
+        "icmp_type": -1,
+        "icmp_code": -1,
+        "ip_ttl": 0,
+        "dscp_value": 0,
+        "arp_opcode": -1,
+        "tcp_stream_index": -1,
+        "dup_ack_num": -1,
+        "adv_window": 0,
+        "icmp_fragmentation_needed_original_mtu": 0,
+    }
+
+    for col in int_cols_to_clean:
+        if col in packet_df.columns:
+            if packet_df[col].isnull().any():
+                packet_df[col] = packet_df[col].fillna(
+                    fill_values_for_int_cols.get(col, 0)
+                )
+            packet_df[col] = packet_df[col].astype("int64")
+
     flow_summary_df, _ = flow_table.get_summary_df()
     tagged_flow_df = heuristic_engine.tag_flows(flow_summary_df)
     metrics_json = metrics_builder.build_metrics(packet_df, tagged_flow_df)
