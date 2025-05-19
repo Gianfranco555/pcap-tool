@@ -103,3 +103,35 @@ def test_enrich_ips_includes_asn(monkeypatch):
     info = enricher.enrich_ips(["1.2.3.4"])
     assert info["1.2.3.4"]["asn"]["organization"] == "TestOrg"
 
+
+def test_get_rdns_caching(monkeypatch):
+    calls = []
+
+    def fake_gethostbyaddr(ip):
+        calls.append(ip)
+        return ("dns.google", [], [ip])
+
+    monkeypatch.setattr(enrichment_mod.socket, "gethostbyaddr", fake_gethostbyaddr)
+    enricher = Enricher()
+
+    assert enricher.get_rdns("8.8.8.8") == "dns.google"
+    assert enricher.get_rdns("8.8.8.8") == "dns.google"
+    assert calls == ["8.8.8.8"]
+
+
+def test_enrich_ips_rdns_cache(monkeypatch):
+    count = {"n": 0}
+
+    def fake_gethostbyaddr(ip):
+        count["n"] += 1
+        return ("dns.google", [], [ip])
+
+    monkeypatch.setattr(enrichment_mod.socket, "gethostbyaddr", fake_gethostbyaddr)
+    enricher = Enricher()
+
+    first = enricher.enrich_ips(["8.8.8.8"])
+    second = enricher.enrich_ips(["8.8.8.8"])
+
+    assert first["8.8.8.8"]["rdns"] == "dns.google"
+    assert second["8.8.8.8"]["rdns"] == "dns.google"
+    assert count["n"] == 1
