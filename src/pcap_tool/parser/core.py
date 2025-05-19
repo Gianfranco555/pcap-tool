@@ -1,7 +1,7 @@
 # src/pcap_tool/parser.py
 from dataclasses import asdict
 from datetime import datetime
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 from typing import (
     Generator,
     Any,
@@ -23,7 +23,11 @@ from collections import defaultdict, deque
 
 from ..exceptions import CorruptPcapError
 from ..heuristics.errors import detect_packet_error
+
 from ..models import PcapRecord, ParsedHandle
+
+if TYPE_CHECKING:
+    from pyshark.packet.packet import Packet
 
 class ParserNotAvailable(RuntimeError):
     """Raised when no parser backend is available."""
@@ -143,7 +147,7 @@ def _get_pyshark_layer_attribute(layer: Any, attribute_name: str, frame_number_f
     return raw_value
 
 
-def _extract_sni_pyshark(packet: pyshark.packet.packet.Packet) -> Optional[str]:
+def _extract_sni_pyshark(packet: "Packet") -> Optional[str]:
     logger.debug(f"Frame {packet.number}: Attempting SNI extraction (V_FIXED_ACCESS).")
     sni_value = None
     try:
