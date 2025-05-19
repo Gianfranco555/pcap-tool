@@ -5,6 +5,7 @@ from .parser import (
     iter_parsed_frames,
     PcapRecord,
     ParsedHandle,
+    validate_pcap_file,
 )
 from .pdf_report import generate_pdf_report
 from .summary import generate_summary_df, export_summary_excel
@@ -20,6 +21,7 @@ __all__ = [
     "iter_parsed_frames",
     "PcapRecord",
     "ParsedHandle",
+    "validate_pcap_file",
     "generate_pdf_report",
     "generate_summary_df",
     "export_summary_excel",

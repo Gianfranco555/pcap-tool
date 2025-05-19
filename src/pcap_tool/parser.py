@@ -20,6 +20,8 @@ from math import ceil
 from concurrent.futures import ProcessPoolExecutor
 from collections import defaultdict, deque
 
+from .exceptions import CorruptPcapError
+
 logger = logging.getLogger(__name__)
 
 _USE_PYSHARK = False
@@ -42,6 +44,32 @@ except ImportError:
 
 if not _USE_PYSHARK and not _USE_PCAPKIT:
     logger.error("Neither PyShark nor PCAPKit is available. PCAP parsing will not function.")
+
+# --- PCAP validation constants ---
+_MAGIC_PCAP_LE = b"\xd4\xc3\xb2\xa1"
+_MAGIC_PCAP_BE = b"\xa1\xb2\xc3\xd4"
+_MAGIC_PCAPNG = b"\x0a\x0d\x0d\x0a"
+
+
+def validate_pcap_file(filepath: str) -> bool:
+    """Return ``True`` if ``filepath`` appears to be a valid PCAP/PCAPNG file."""
+
+    path = Path(filepath)
+    if not path.is_file():
+        logger.warning("PCAP file does not exist: %s", filepath)
+        return False
+    try:
+        with path.open("rb") as f:
+            magic = f.read(4)
+    except OSError as exc:
+        logger.warning("Failed to read file %s: %s", filepath, exc)
+        return False
+
+    if magic in (_MAGIC_PCAP_LE, _MAGIC_PCAP_BE, _MAGIC_PCAPNG):
+        return True
+
+    logger.warning("Invalid PCAP magic number %s for %s", magic.hex(), filepath)
+    return False
 
 # --- Helper Dictionaries (TLS, DNS, DHCP from previous chunks) ---
 TLS_HANDSHAKE_TYPE_MAP = { '0': "HelloRequest", '1': "ClientHello", '2': "ServerHello", '4': "NewSessionTicket", '5': "EndOfEarlyData", '8': "EncryptedExtensions", '11': "Certificate", '12': "ServerKeyExchange", '13': "CertificateRequest", '14': "ServerHelloDone", '15': "CertificateVerify", '16': "ClientKeyExchange", '20': "Finished", '24': "CertificateStatus", '25': "KeyUpdate",}
@@ -1136,6 +1164,14 @@ def iter_parsed_frames(
 
     original_path = isinstance(file_like, (str, os.PathLike, Path))
     path, cleanup = _ensure_path(file_like)
+    if not validate_pcap_file(str(path)):
+        if cleanup:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        logger.error("PCAP validation failed for %s", path)
+        raise CorruptPcapError(f"Invalid or corrupt PCAP file: {path}")
     total_estimate = _estimate_total_packets(path)
 
     # Auto workers detection (cap at 4)
