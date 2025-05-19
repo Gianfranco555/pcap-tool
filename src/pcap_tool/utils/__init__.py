@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from .pandas_safe import coalesce, safe_int
+
 
 def export_to_csv(data_to_export: pd.DataFrame, filename: str) -> None:
     """Write ``data_to_export`` to ``filename`` as CSV without index."""
@@ -24,3 +26,10 @@ def safe_int_or_default(value: object, default: int = 0) -> int:
         except (TypeError, ValueError):
             pass
     return default
+
+__all__ = [
+    "export_to_csv",
+    "safe_int_or_default",
+    "safe_int",
+    "coalesce",
+]

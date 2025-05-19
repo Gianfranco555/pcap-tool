@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List
 import pandas as pd
+from ..utils import coalesce
 
 from ..enrichment import Enricher
 
@@ -32,7 +33,7 @@ class SecurityAuditor:
                 "security_flag_plaintext_http", pd.Series(dtype=bool)
             )
             result["plaintext_http_flows"] = int(
-                plaintext_series.fillna(False).astype(bool).sum()
+                coalesce(plaintext_series, False).astype(bool).sum()
             )
 
             if "security_flag_outdated_tls_version" in tagged_flow_df.columns:
@@ -49,7 +50,7 @@ class SecurityAuditor:
                 "security_flag_self_signed_cert", pd.Series(dtype=bool)
             )
             result["self_signed_certificate_flows"] = int(
-                self_signed_series.fillna(False).astype(bool).sum()
+                coalesce(self_signed_series, False).astype(bool).sum()
             )
 
         enriched_ips = self.enricher.enrich_ips(unique_external_ips)
