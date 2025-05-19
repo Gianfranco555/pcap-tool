@@ -1,3 +1,4 @@
+
 """Command line entry for the hybrid PCAP analysis pipeline."""
 
 from __future__ import annotations
@@ -147,41 +148,22 @@ def run_analysis(pcap_path: Path, rules_path: Path) -> Tuple[dict, pd.DataFrame,
         "icmp_fragmentation_needed_original_mtu": 0,
     }
 
-    # REFINED CLEANING BLOCK
-for col in int_cols_to_clean:
-    if col in packet_df.columns:
-        # Attempt to convert to numeric, coercing errors to NaN.
-        # This handles cases where a column might have non-numeric strings if parser had issues.
-        packet_df[col] = pd.to_numeric(packet_df[col], errors='coerce')
-
-        # Now fill NaN with the placeholder
-        if packet_df[col].isnull().any():
-            packet_df[col] = packet_df[col].fillna(
-                fill_values_for_int_cols.get(col, 0) # Default to 0 if col not in fill_values
-            )
-        else: # If no NaNs after to_numeric, it might be all valid numbers but still float
-              # Or it could be empty, in which case astype(int64) on empty float is fine.
-              # If it was all valid numbers, ensure it's not empty before fillna
-            pass # No NaNs to fill
-
-        # Before astype, ensure there are no NaNs left if the column wasn't empty
-        # If a column was ALL NaNs, it's now all fill_value.
-        # If it had some numbers and some NaNs, NaNs are now fill_value.
-        # If it was all numbers, it's unchanged.
-        # This check is belt-and-suspenders after fillna, but good for debugging.
-        if packet_df[col].isnull().any():
-            logger.error(f"Column {col} still has NaNs before astype(int64) despite fillna. This should not happen.")
-            # Fallback or raise error, for now, let's try to proceed by filling again
-            packet_df[col] = packet_df[col].fillna(fill_values_for_int_cols.get(col, 0))
-
-
-        try:
+    for col in int_cols_to_clean:
+        if col in packet_df.columns:
+            if packet_df[col].isnull().any():
+                packet_df[col] = packet_df[col].fillna(
+                    fill_values_for_int_cols.get(col, 0)
+                )
             packet_df[col] = packet_df[col].astype("int64")
-        except TypeError as e:
-            logger.error(f"Failed to convert column {col} to int64. Current dtype: {packet_df[col].dtype}. Error: {e}")
-            # Add more debugging: print unique values, etc.
-            # For example: logger.debug(f"Unique values in {col} before error: {packet_df[col].unique()[:20]}")
-            raise # Re-raise the error to stop execution and see the problem
+
+    flow_summary_df, _ = flow_table.get_summary_df()
+    tagged_flow_df = heuristic_engine.tag_flows(flow_summary_df)
+    metrics_json = metrics_builder.build_metrics(packet_df, tagged_flow_df)
+
+    text_summary = llm_summarizer.generate_text_summary(metrics_json)
+    pdf_bytes = generate_pdf_report(metrics_json, tagged_flow_df)
+
+    return metrics_json, tagged_flow_df, text_summary, pdf_bytes
 
 
 def main(argv: List[str] | None = None) -> None:
