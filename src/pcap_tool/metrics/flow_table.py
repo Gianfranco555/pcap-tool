@@ -122,6 +122,15 @@ class FlowTable:
             empty = pd.DataFrame()
             return empty, empty
         df = pd.DataFrame(rows)
-        df_bytes = df.sort_values("bytes_total", ascending=False).head(top_n_bytes).reset_index(drop=True)
-        df_pkts = df.sort_values("pkts_total", ascending=False).head(top_n_packets).reset_index(drop=True)
+        df["l7_protocol_guess"] = df.apply(guess_l7_protocol, axis=1)
+        df_bytes = (
+            df.sort_values("bytes_total", ascending=False)
+            .head(top_n_bytes)
+            .reset_index(drop=True)
+        )
+        df_pkts = (
+            df.sort_values("pkts_total", ascending=False)
+            .head(top_n_packets)
+            .reset_index(drop=True)
+        )
         return df_bytes, df_pkts
