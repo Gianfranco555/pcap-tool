@@ -4,7 +4,7 @@ from collections import defaultdict
 from statistics import mean, pstdev
 from typing import DefaultDict, List
 
-from ..parser import PcapRecord
+from ..models import PcapRecord
 
 
 class TimelineBuilder:

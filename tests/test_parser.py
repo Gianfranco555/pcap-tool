@@ -9,9 +9,9 @@ from dataclasses import fields # Use fields to get all PcapRecord field names
 from pcap_tool.parser import (
     parse_pcap,
     parse_pcap_to_df,
-    PcapRecord,
     validate_pcap_file,
 )
+from pcap_tool.models import PcapRecord
 from pcap_tool.exceptions import CorruptPcapError
 import shutil
 

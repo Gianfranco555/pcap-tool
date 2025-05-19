@@ -6,7 +6,7 @@ from collections import defaultdict
 from typing import Dict, List
 import numpy as np
 
-from ..parser import PcapRecord
+from ..models import PcapRecord
 from ..utils import safe_int_or_default
 
 

@@ -3,10 +3,9 @@ from .parser import (
     parse_pcap,
     parse_pcap_to_df,
     iter_parsed_frames,
-    PcapRecord,
-    ParsedHandle,
     validate_pcap_file,
 )
+from .models import PcapRecord, ParsedHandle
 from .pdf_report import generate_pdf_report
 from .summary import generate_summary_df, export_summary_excel
 from .utils import export_to_csv

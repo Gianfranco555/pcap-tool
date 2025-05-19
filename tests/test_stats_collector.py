@@ -8,7 +8,8 @@ from scapy.layers.inet import IP, TCP, UDP, ICMP
 
 
 from pcap_tool.metrics.stats_collector import StatsCollector
-from pcap_tool.parser import parse_pcap_to_df, PcapRecord
+from pcap_tool.parser import parse_pcap_to_df
+from pcap_tool.models import PcapRecord
 from pcap_tool.exceptions import CorruptPcapError
 
 

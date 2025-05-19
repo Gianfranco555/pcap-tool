@@ -238,4 +238,3 @@ def test_rulefile_error_on_bad_yaml(tmp_path):
     bad_yaml_path.write_text(":- bad")
     with pytest.raises(RuleFileError):
         HeuristicEngine(str(bad_yaml_path))
-

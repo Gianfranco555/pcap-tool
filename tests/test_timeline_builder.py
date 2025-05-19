@@ -1,5 +1,5 @@
 from pcap_tool.metrics.timeline_builder import TimelineBuilder
-from pcap_tool.parser import PcapRecord
+from pcap_tool.models import PcapRecord
 
 
 def test_timeline_builder_basic():

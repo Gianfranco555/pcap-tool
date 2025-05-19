@@ -1,7 +1,7 @@
 import pandas as pd
 
 from pcap_tool.metrics.flow_table import FlowTable
-from pcap_tool.parser import PcapRecord
+from pcap_tool.models import PcapRecord
 
 
 def test_flow_table_basic():
