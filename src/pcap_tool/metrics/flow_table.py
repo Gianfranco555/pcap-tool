@@ -9,6 +9,7 @@ from typing import Dict, Tuple, Iterable
 
 from ..parser import PcapRecord
 from ..utils import safe_int_or_default
+from ..heuristics.protocol_inference import guess_l7_protocol
 
 
 @dataclass
@@ -100,6 +101,13 @@ class FlowTable:
                     "src_port": flow.src_port,
                     "dest_port": flow.dest_port,
                     "protocol": flow.protocol,
+                    "l7_protocol_guess": guess_l7_protocol(
+                        {
+                            "protocol": flow.protocol,
+                            "src_port": flow.src_port,
+                            "dest_port": flow.dest_port,
+                        }
+                    ),
                     "bytes_c2s": flow.bytes_c2s,
                     "bytes_s2c": flow.bytes_s2c,
                     "bytes_total": bytes_total,

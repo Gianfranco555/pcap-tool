@@ -57,3 +57,4 @@ def test_flow_table_basic():
     assert row["sparkline_bytes_c2s"] == "100,150"
     assert row["sparkline_bytes_s2c"] == "200,0"
     assert len(row["sparkline_bytes_c2s"].split(",")) == 2
+    assert row["l7_protocol_guess"] == "HTTP"
