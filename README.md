@@ -79,8 +79,15 @@ These changes keep the codebase production-ready while letting you run everythin
     python3 -m venv .venv
     source .venv/bin/activate
     ```
-3.  **Install system dependencies (if not using a comprehensive setup script like the one we discussed):**
-    *(Mention tshark or point to the setup script)*
+3.  **Install system dependencies**
+    `tshark` must be installed and available in your `PATH`. For Ubuntu/Debian:
+    ```bash
+    sudo apt-get update && sudo apt-get install -y tshark
+    ```
+    On macOS with Homebrew:
+    ```bash
+    brew install wireshark
+    ```
 4.  **Install Python dependencies:**
     ```bash
     pip install --upgrade pip
