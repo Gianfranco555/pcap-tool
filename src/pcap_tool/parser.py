@@ -122,6 +122,25 @@ class PcapRecord:
     ssl_inspection_active: Optional[bool] = None
     zscaler_policy_block_type: Optional[str] = None
 
+    def __post_init__(self) -> None:
+        """Normalize key fields for consistency."""
+        try:
+            self.frame_number = int(self.frame_number)
+        except (TypeError, ValueError):
+            self.frame_number = 0
+        try:
+            self.timestamp = float(self.timestamp)
+        except (TypeError, ValueError):
+            self.timestamp = 0.0
+
+        if isinstance(self.source_port, str):
+            self.source_port = _safe_int(self.source_port)
+        if isinstance(self.destination_port, str):
+            self.destination_port = _safe_int(self.destination_port)
+
+        if isinstance(self.tcp_stream_index, str):
+            self.tcp_stream_index = _safe_int(self.tcp_stream_index)
+
     def __str__(self):
         # ... (previous __str__ content, potentially updated for new fields) ...
         final_chunk_info = []
