@@ -23,41 +23,33 @@ graph TD
     Celery -.-> S3[(S3/MinIO)]
     Celery -.-> Broker[(RabbitMQ)]
     SQLite -.-> Postgres[(PostgreSQL)]
-Solid lines are active in the POC; dashed lines are placeholders kept in code but turned off via config.
+Solid lines show the pieces that exist in this repository. Dashed lines in the
+diagram are features planned for later (API server, Celery workers, etc.).
+
+Current repository layout:
 
 pcap-tool/
-├─ .env.example           # sample config; copy to .env for local run
-├─ docker-compose.dev.yml # optional: spin up RabbitMQ/S3 later
+├─ CHANGELOG.md
 ├─ README.md
 ├─ pyproject.toml
+├─ requirements.txt
 ├─ src/
-│  ├─ api/                # FastAPI routes
-│  ├─ services/           # orchestration logic
-│  ├─ workers/            # Celery tasks (auto-eager in dev)
-│  ├─ adapters/
-│  │   ├─ snow.py         # ServiceNow client (stub in dev)
-│  │   ├─ splunk.py       # Splunk HEC client (stub in dev)
-│  │   └─ storage.py      # S3 vs. local-disk abstraction
-│  ├─ models/             # Pydantic & ORM
-│  ├─ utils/              # helpers, logging
-│  └─ config.py           # Pydantic BaseSettings (DEV/PROD switch)
-├─ stubs/                 # lightweight mocks for external services
-│  └─ __init__.py
+│  ├─ app.py              # Streamlit demo UI
+│  ├─ heuristics/
+│  │   ├─ engine.py
+│  │   └─ rules.yaml
+│  └─ pcap_tool/
+│      ├─ __main__.py     # CLI entry point
+│      ├─ parser.py
+│      └─ pdf_report.py
 ├─ tests/                 # pytest suites
-├─ scripts/               # CLI tools (db init, demo upload)
-├─ migrations/            # Alembic (SQLite→Postgres compatible)
-└─ docs/                  # architecture notes, run-books
-Key tweaks
+├─ pytest.ini
+└─ .flake8
+Key notes
 
-stubs/ & adapters/*—production clients and dev mocks share the same interface, so swapping is just settings.env.
-
-storage.py—writes to ./data/ in dev, S3 in prod.
-
-config.py—single source of truth; ENV=dev sets SQLite, eager Celery, stub ServiceNow, etc.
-
-docker-compose.dev.yml—optional; lets you add RabbitMQ or MinIO locally without changing code.
-
-These changes keep the codebase production-ready while letting you run everything on your Mac today with uvicorn src.api.main:app --reload.
+* The command-line parser works today and outputs DuckDB or Arrow files.
+* `src/app.py` offers a minimal Streamlit demo.
+* The FastAPI API, Celery tasks and external adapters are still TODO.
 
 ## Prerequisites
 
@@ -86,28 +78,21 @@ These changes keep the codebase production-ready while letting you run everythin
     pip install --upgrade pip
     pip install -r requirements.txt
     ```
-5.  **Set up environment variables:**
-    ```bash
-    cp .env.example .env
-    ```
-    *(Mention if any variables in .env need to be changed for a basic local run)*
-6.  **Initialize the database (if applicable):**
-    ```bash
-    python src/scripts/initialize_db.py # Or whatever your script is
-    ```
+5.  *(No environment variables are required for the basic CLI parser)*
 
 ## Running the Application
 
-* **Backend API (FastAPI):**
-    ```bash
-    uvicorn src.api.main:app --reload
-    ```
-    *(API will be available at http://localhost:8000)*
-* **Frontend WebUI (React):**
-    *(Add commands here, e.g., `cd path/to/frontend && npm start`)*
-    *(WebUI will be available at http://localhost:3000)*
-* **Celery Workers (if not using eager mode for specific testing):**
-    *(Add command if needed)*
+### Command-line
+```bash
+python -m pcap_tool parse example.pcap --output duckdb://flows.db
+```
+
+### Optional Streamlit UI
+```bash
+streamlit run src/app.py
+```
+
+The FastAPI API, React frontend and Celery workers are planned for a later release.
 
 ## Running Tests
 
