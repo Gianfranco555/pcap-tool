@@ -139,6 +139,12 @@ def assert_new_fields_logic(record_series, is_ip_packet=True, is_tcp_packet=Fals
         assert pd.isna(record_series["is_zpa_synthetic_ip"]), \
             f"is_zpa_synthetic_ip (non-IP): Expected NA, got {record_series['is_zpa_synthetic_ip']}"
 
+    if is_tcp_packet:
+        val = record_series["is_src_client"]
+        assert pd.isna(val) or val in [True, False]
+    else:
+        assert pd.isna(record_series["is_src_client"])
+
 def test_happy_path_parsing(happy_path_pcap):
     df = parse_pcap(str(happy_path_pcap)).as_dataframe()
     assert not df.empty, "DataFrame should not be empty"
@@ -279,6 +285,16 @@ def test_tcp_flag_parsing(tcp_flags_pcap):
     assert finpsh["tcp_flags_urg"] == True
     rst = df.iloc[3]
     assert rst["tcp_flags_rst"] in [True, None]
+
+
+def test_is_src_client_orientation(happy_path_pcap):
+    df = parse_pcap(str(happy_path_pcap)).as_dataframe()
+    syn = df.iloc[0]
+    synack = df.iloc[1]
+    ack = df.iloc[2]
+    assert syn["is_src_client"] == True
+    assert synack["is_src_client"] == False
+    assert ack["is_src_client"] == True
 
 
 def test_dns_query_and_response(dns_query_response_pcap):

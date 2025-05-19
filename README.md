@@ -115,6 +115,12 @@ These changes keep the codebase production-ready while letting you run everythin
 pytest
 ```
 
+### Data Columns
+
+Parsed DataFrames include many fields from the capture.  The `is_src_client`
+column indicates whether the source of a TCP packet is the initiating client of
+its flow.
+
 ### Multiprocessing Parser
 
 `iter_parsed_frames` uses multiple processes by default to speed up large PCAP files. Pass `workers=0` to disable multiprocessing; otherwise up to four processes are used.
