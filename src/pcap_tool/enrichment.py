@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import socket
 from typing import Any, Optional
 
 try:
@@ -41,6 +42,7 @@ class Enricher:
         self.geoip_asn_db_path = geoip_asn_db_path
         self.geoip_city_reader: Reader | None = None
         self.geoip_asn_reader: Reader | None = None
+        self._rdns_cache: dict[str, str | None] = {}
 
         if geoip_city_db_path and Reader is not None:
             logger.debug("GeoIP City database path provided: %s", geoip_city_db_path)
@@ -110,7 +112,25 @@ class Enricher:
             "organization": getattr(resp, "autonomous_system_organization", None),
         }
 
-    def get_rdns(self, ip: str) -> Optional[str]:
+    def get_rdns(self, ip: str, timeout: float | None = 2.0) -> Optional[str]:
         """Perform reverse DNS lookup for an IP address."""
         logger.debug("rDNS lookup for: %s", ip)
-        return None  # Placeholder implementation
+
+        if ip in self._rdns_cache:
+            return self._rdns_cache[ip]
+
+        old_timeout: float | None = None
+        try:
+            if timeout is not None:
+                old_timeout = socket.getdefaulttimeout()
+                socket.setdefaulttimeout(timeout)
+            host, *_ = socket.gethostbyaddr(ip)
+            self._rdns_cache[ip] = host
+            return host
+        except (socket.herror, socket.gaierror, TimeoutError):
+            logger.info("rDNS lookup failed for %s", ip)
+            self._rdns_cache[ip] = None
+            return None
+        finally:
+            if timeout is not None:
+                socket.setdefaulttimeout(old_timeout)

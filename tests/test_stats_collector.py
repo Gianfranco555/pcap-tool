@@ -17,7 +17,7 @@ HAS_TSHARK = shutil.which("tshark") is not None
 
 
 @pytest.mark.skipif(not HAS_TSHARK, reason="tshark not available")
-def test_stats_collector_basic():
+def test_stats_collector_basic_fixture():
     df = parse_pcap_to_df(FIXTURE, workers=0)
     if df.empty:
         pytest.skip("pcap parsing not available")
