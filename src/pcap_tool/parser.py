@@ -1051,12 +1051,17 @@ def _estimate_total_packets(path: Path) -> Optional[int]:
         commands.append([env_path, "-c", str(path)])
 
     for cmd in commands:
+        logger.debug("Running packet count command: %s", " ".join(cmd))
         try:
-            out = subprocess.check_output(cmd, text=True)
-            for line in out.splitlines():
+            proc = subprocess.run(cmd, text=True, capture_output=True, check=True)
+            logger.debug("count stdout: %s", proc.stdout.strip())
+            logger.debug("count stderr: %s", proc.stderr.strip())
+            for line in proc.stdout.splitlines():
                 if "Number of packets" in line:
                     count_str = line.split(":", 1)[1].strip().replace(",", "")
-                    return int(count_str)
+                    count = int(count_str)
+                    logger.debug("Parsed packet count: %s", count)
+                    return count
         except (subprocess.SubprocessError, FileNotFoundError) as exc:  # pragma: no cover - best effort only
             logger.debug("capinfos failed with %s: %s", cmd[0], exc)
 
@@ -1194,6 +1199,12 @@ def iter_parsed_frames(
         logger.error("PCAP validation failed for %s", path)
         raise CorruptPcapError(f"Invalid or corrupt PCAP file: {path}")
     total_estimate = _estimate_total_packets(path)
+    logger.debug("Total packet estimate from capinfos: %s", total_estimate)
+    if total_estimate is not None:
+        est_chunks = ceil(total_estimate / chunk_size)
+        logger.debug(
+            "Estimated chunks for chunk_size %s: %s", chunk_size, est_chunks
+        )
 
     # Auto workers detection (cap at 4)
     if workers is None:
