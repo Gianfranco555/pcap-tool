@@ -574,6 +574,7 @@ def _parse_with_pyshark(
                             packet_length=packet_length_val,
                             raw_packet_summary=raw_summary,
                             tcp_rtt_ms=None,
+
                             # Other fields default to None
                         )
                         logger.debug(
@@ -581,7 +582,8 @@ def _parse_with_pyshark(
                         )
                         yield record_obj
                         generated_records += 1
-                    continue  # Skip to next packet
+
+                    continue # Skip to next packet
 
                 transport_layer_obj = None
                 tcp_rtt_ms_sample = None
