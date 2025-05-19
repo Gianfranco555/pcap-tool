@@ -2,6 +2,8 @@ import math
 from pcap_tool.analyze import PerformanceAnalyzer
 from pcap_tool.parser import PcapRecord
 from pcap_tool.pipeline_app import _derive_flow_id, _flow_cache_key
+from pcap_tool.metrics.flow_table import FlowTable
+
 
 
 def test_derive_flow_id_nan_ports():
@@ -51,3 +53,21 @@ def test_performance_analyzer_nan_sequence():
     analyzer.add_packet(syn, "flow", True)
     analyzer.add_packet(sa, "flow", False)
     assert analyzer.get_summary()["tcp_rtt_ms"]["samples"] == 0
+
+
+def test_flow_table_nan_values():
+    table = FlowTable()
+    rec = PcapRecord(
+        frame_number=1,
+        timestamp=1.0,
+        source_ip="1.1.1.1",
+        destination_ip="2.2.2.2",
+        source_port=math.nan,
+        destination_port=math.nan,
+        packet_length=math.nan,
+        protocol="TCP",
+    )
+    table.add_packet(rec, True)
+    df, _ = table.get_summary_df()
+    assert df.iloc[0]["src_port"] == 0
+    assert df.iloc[0]["dest_port"] == 0

@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Tuple, Iterable
 
 from ..parser import PcapRecord
+from ..utils import safe_int_or_default
 
 
 @dataclass
@@ -38,8 +39,8 @@ class FlowTable:
     def _get_key(self, rec: PcapRecord, is_src_client: bool) -> Tuple[str, str, int, int, str]:
         src_ip = rec.source_ip or ""
         dest_ip = rec.destination_ip or ""
-        src_port = int(rec.source_port or 0)
-        dest_port = int(rec.destination_port or 0)
+        src_port = safe_int_or_default(rec.source_port, 0)
+        dest_port = safe_int_or_default(rec.destination_port, 0)
         proto = rec.protocol or ""
         if is_src_client:
             return src_ip, dest_ip, src_port, dest_port, proto
@@ -50,7 +51,7 @@ class FlowTable:
         key = self._get_key(record, is_src_client)
         flow = self.flows.get(key)
         ts = float(record.timestamp or 0.0)
-        length = int(record.packet_length or 0)
+        length = safe_int_or_default(record.packet_length, 0)
         if flow is None:
             flow = Flow(
                 src_ip=key[0],
@@ -66,7 +67,7 @@ class FlowTable:
             flow.end_ts = max(flow.end_ts, ts)
             if flow.start_ts == 0.0 or ts < flow.start_ts:
                 flow.start_ts = ts
-        bin_sec = int(ts)
+        bin_sec = safe_int_or_default(ts, 0)
         if is_src_client:
             flow.bytes_c2s += length
             flow.pkts_c2s += 1
@@ -80,8 +81,8 @@ class FlowTable:
     def _sparkline(bins: defaultdict[int, int], start_ts: float, end_ts: float) -> str:
         if not bins:
             return ""
-        start = int(start_ts)
-        end = int(end_ts)
+        start = safe_int_or_default(start_ts, 0)
+        end = safe_int_or_default(end_ts, 0)
         return ",".join(str(bins.get(sec, 0)) for sec in range(start, end + 1))
 
     def get_summary_df(self, top_n_bytes: int = 20, top_n_packets: int = 20):
