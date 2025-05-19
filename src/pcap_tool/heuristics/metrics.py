@@ -1,6 +1,8 @@
 
 """Placeholder utilities for heuristic metrics aggregation."""
 
+from __future__ import annotations
+
 from collections import defaultdict
 from typing import Iterable, Mapping, Dict, Any
 
@@ -21,8 +23,6 @@ def count_tls_versions(records: Iterable[Any]) -> Dict[str, int]:
         if version:
             counts[str(version)] += 1
     return dict(counts)
-
-from __future__ import annotations
 
 from typing import List, Optional
 import numpy as np
