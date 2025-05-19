@@ -1,5 +1,5 @@
 from pcap_tool.analyze import PerformanceAnalyzer
-from pcap_tool.parser import PcapRecord
+from pcap_tool.models import PcapRecord
 
 
 def _flow_id(rec: PcapRecord, is_client: bool) -> str:

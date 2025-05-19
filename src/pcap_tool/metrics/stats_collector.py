@@ -3,7 +3,7 @@
 from collections import Counter
 from typing import Dict
 
-from ..parser import PcapRecord
+from ..models import PcapRecord
 
 
 class StatsCollector:

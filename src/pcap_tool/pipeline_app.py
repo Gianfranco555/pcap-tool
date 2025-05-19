@@ -10,7 +10,8 @@ from typing import List, Tuple
 
 import pandas as pd
 
-from .parser import iter_parsed_frames, PcapRecord
+from .parser import iter_parsed_frames
+from .models import PcapRecord
 from .metrics.stats_collector import StatsCollector
 from .metrics.flow_table import FlowTable
 from .metrics.timeline_builder import TimelineBuilder

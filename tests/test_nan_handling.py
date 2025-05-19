@@ -1,6 +1,6 @@
 import math
 from pcap_tool.analyze import PerformanceAnalyzer
-from pcap_tool.parser import PcapRecord
+from pcap_tool.models import PcapRecord
 from pcap_tool.pipeline_app import _derive_flow_id, _flow_cache_key
 from pcap_tool.metrics.flow_table import FlowTable
 

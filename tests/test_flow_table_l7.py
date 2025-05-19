@@ -1,5 +1,5 @@
 from pcap_tool.metrics.flow_table import FlowTable
-from pcap_tool.parser import PcapRecord
+from pcap_tool.models import PcapRecord
 
 
 def _make_record(frame, ts, sport, dport, proto):

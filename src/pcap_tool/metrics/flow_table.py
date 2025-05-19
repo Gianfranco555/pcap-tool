@@ -7,7 +7,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, Tuple, Iterable
 
-from ..parser import PcapRecord
+from ..models import PcapRecord
 from ..utils import safe_int_or_default
 from ..heuristics.protocol_inference import guess_l7_protocol
 
