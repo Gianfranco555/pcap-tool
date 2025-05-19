@@ -124,6 +124,7 @@ def assert_new_fields_logic(record_series, is_ip_packet=True, is_tcp_packet=Fals
     assert pd.isna(record_series["gre_protocol"]), f"GRE Protocol: Expected NA, got {record_series['gre_protocol']}"
     assert pd.isna(record_series["esp_spi"]), f"ESP SPI: Expected NA, got {record_series['esp_spi']}"
     assert pd.isna(record_series["quic_initial_packet_present"]), f"QUIC Initial: Expected NA, got {record_series['quic_initial_packet_present']}"
+    assert pd.isna(record_series["is_quic"]), f"is_quic: Expected NA, got {record_series['is_quic']}"
     assert pd.isna(record_series["ssl_inspection_active"]), f"SSL Inspection: Expected NA, got {record_series['ssl_inspection_active']}"
     assert pd.isna(record_series["zscaler_policy_block_type"]), f"ZS Policy Block: Expected NA, got {record_series['zscaler_policy_block_type']}"
 
@@ -270,6 +271,13 @@ def dns_query_response_pcap(tmp_path):
     return create_pcap_file([query, response], tmp_path, "dns_qr.pcap")
 
 
+@pytest.fixture
+def udp_443_non_quic_pcap(tmp_path):
+    pkt = Ether()/IP(src="10.10.10.1", dst="10.10.10.2", flags="DF")/UDP(sport=1111, dport=443)/Raw(load=b"hello")
+    pkt.time = 1678886700.0
+    return create_pcap_file([pkt], tmp_path, "udp443_not_quic.pcap")
+
+
 def test_tcp_flag_parsing(tcp_flags_pcap):
     df = parse_pcap(str(tcp_flags_pcap)).as_dataframe()
     assert len(df) == 4
@@ -353,6 +361,14 @@ def test_basic_l2_l3_l4_details(tcp_flags_pcap):
     assert rec["source_port"] == 1111
     assert rec["destination_port"] == 80
     assert rec["protocol"] == "TCP"
+
+
+def test_udp_443_not_quic(udp_443_non_quic_pcap):
+    df = parse_pcap(str(udp_443_non_quic_pcap)).as_dataframe()
+    rec = df.iloc[0]
+    assert rec["protocol"] == "UDP"
+    assert rec["destination_port"] == 443
+    assert rec["is_quic"] == False
 
 
 def test_safe_int_parses_commas():
