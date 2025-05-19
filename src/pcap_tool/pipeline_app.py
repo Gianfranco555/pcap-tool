@@ -21,6 +21,7 @@ from .metrics_builder import MetricsBuilder
 from heuristics.engine import HeuristicEngine
 from llm_summarizer import LLMSummarizer
 from .pdf_report import generate_pdf_report
+from .utils import safe_int_or_default
 
 
 def _derive_flow_id(rec: PcapRecord) -> Tuple[str, str, int, int, str]:
@@ -28,8 +29,8 @@ def _derive_flow_id(rec: PcapRecord) -> Tuple[str, str, int, int, str]:
     return (
         rec.source_ip or "",
         rec.destination_ip or "",
-        int(rec.source_port or 0),
-        int(rec.destination_port or 0),
+        safe_int_or_default(rec.source_port, 0),
+        safe_int_or_default(rec.destination_port, 0),
         rec.protocol or "",
     )
 
@@ -41,8 +42,14 @@ def _flow_cache_key(record: PcapRecord) -> str:
     if record.source_ip and record.destination_ip and record.protocol:
         props = sorted(
             [
-                (record.source_ip, int(record.source_port or 0)),
-                (record.destination_ip, int(record.destination_port or 0)),
+                (
+                    record.source_ip,
+                    safe_int_or_default(record.source_port, 0),
+                ),
+                (
+                    record.destination_ip,
+                    safe_int_or_default(record.destination_port, 0),
+                ),
             ]
         )
         return f"{record.protocol}_{props[0][0]}:{props[0][1]}_{props[1][0]}:{props[1][1]}"

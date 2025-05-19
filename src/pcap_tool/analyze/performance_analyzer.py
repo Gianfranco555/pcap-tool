@@ -7,6 +7,7 @@ from typing import Dict, List
 import numpy as np
 
 from ..parser import PcapRecord
+from ..utils import safe_int_or_default
 
 
 class PerformanceAnalyzer:
@@ -43,7 +44,7 @@ class PerformanceAnalyzer:
             if is_client_packet and record.tcp_flags_syn and not record.tcp_flags_ack:
                 entry = self.tcp_syn_timestamps[flow_id_str]
                 entry["client_syn_ts"] = record.timestamp
-                entry["client_seq"] = int(record.tcp_sequence_number or 0)
+                entry["client_seq"] = safe_int_or_default(record.tcp_sequence_number, 0)
 
             if (
                 not is_client_packet
@@ -54,8 +55,10 @@ class PerformanceAnalyzer:
                 if (
                     entry
                     and entry.get("client_syn_ts") is not None
-                    and int(record.tcp_acknowledgment_number or -1)
-                    == (entry.get("client_seq") or 0) + 1
+                    and (
+                        safe_int_or_default(record.tcp_acknowledgment_number, -1)
+                        == (entry.get("client_seq") or 0) + 1
+                    )
                 ):
                     rtt = (record.timestamp - float(entry["client_syn_ts"])) * 1000
                     self.rtt_samples_ms.append(rtt)
