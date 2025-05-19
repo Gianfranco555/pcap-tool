@@ -37,17 +37,11 @@ def _flow_cache_key(record: PcapRecord) -> str:
     """Return a direction-agnostic identifier for caching client IP/port."""
     if record.tcp_stream_index is not None:
         return f"TCP_STREAM_{record.tcp_stream_index}"
-    if (
-        record.source_ip
-        and record.destination_ip
-        and record.source_port is not None
-        and record.destination_port is not None
-        and record.protocol
-    ):
+    if record.source_ip and record.destination_ip and record.protocol:
         props = sorted(
             [
-                (record.source_ip, int(record.source_port)),
-                (record.destination_ip, int(record.destination_port)),
+                (record.source_ip, int(record.source_port or 0)),
+                (record.destination_ip, int(record.destination_port or 0)),
             ]
         )
         return f"{record.protocol}_{props[0][0]}:{props[0][1]}_{props[1][0]}:{props[1][1]}"
@@ -103,7 +97,7 @@ def run_analysis(pcap_path: Path, rules_path: Path) -> Tuple[dict, pd.DataFrame,
             else:
                 is_client = rec.source_ip == client[0] and rec.source_port == client[1]
 
-            rec.is_src_client = is_client
+            rec.is_source_client = is_client
             flow_id = _derive_flow_id(rec)
             flow_table.add_packet(rec, is_client)
             performance_analyzer.add_packet(rec, "-".join(map(str, flow_id)), is_client)

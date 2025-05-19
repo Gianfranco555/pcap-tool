@@ -81,6 +81,7 @@ class PcapRecord:
     tcp_options_sack_permitted: Optional[bool] = None; tcp_options_window_scale: Optional[int] = None
     tcp_stream_index: Optional[int] = None
     is_src_client: Optional[bool] = None
+    is_source_client: Optional[bool] = None
     tcp_analysis_retransmission_flags: list[str] = field(default_factory=list)
     tcp_analysis_duplicate_ack_flags: list[str] = field(default_factory=list)
     tcp_analysis_out_of_order_flags: list[str] = field(default_factory=list)
