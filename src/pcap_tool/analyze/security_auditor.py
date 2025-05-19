@@ -56,7 +56,7 @@ class SecurityAuditor:
         unusual_connections: Dict[str, str] = {}
 
         for idx, row in tagged_flow_df.iterrows():
-            dest_ip = row.get("destination_ip")
+            dest_ip = row.get("destination_ip", row.get("dest_ip"))
             if pd.isna(dest_ip):
                 continue
             info = enriched_ips.get(str(dest_ip))

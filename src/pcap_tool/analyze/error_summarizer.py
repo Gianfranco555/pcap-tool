@@ -22,9 +22,11 @@ class ErrorSummarizer:
                 details_dict: Dict[str, Dict[str, object]] = {}
                 for detail, detail_group in type_group.groupby("flow_error_details"):
                     detail_key = str(detail) if pd.notna(detail) else "other"
+                    flow_series = detail_group.get(
+                        "flow_id", pd.Series(dtype=object)
+                    )
                     sample_ids: List[str] = (
-                        detail_group.get("flow_id")
-                        .dropna()
+                        flow_series.dropna()
                         .astype(str)
                         .unique()
                         .tolist()[:3]
@@ -35,9 +37,9 @@ class ErrorSummarizer:
                     }
                 result[err_type_str] = details_dict
             else:
+                flow_series = type_group.get("flow_id", pd.Series(dtype=object))
                 sample_ids = (
-                    type_group.get("flow_id")
-                    .dropna()
+                    flow_series.dropna()
                     .astype(str)
                     .unique()
                     .tolist()[:3]
