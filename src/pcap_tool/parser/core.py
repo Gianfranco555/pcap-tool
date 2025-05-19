@@ -10,6 +10,7 @@ from typing import (
     Callable,
 )
 import logging
+from pcap_tool.logging import get_logger
 import pandas as pd
 from pathlib import Path
 import ipaddress
@@ -27,7 +28,7 @@ from ..models import PcapRecord, ParsedHandle
 class ParserNotAvailable(RuntimeError):
     """Raised when no parser backend is available."""
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _USE_PYSHARK = False
 _USE_PCAPKIT = False

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import logging
+from pcap_tool.logging import get_logger
 import socket
 from typing import Any, Optional
 
@@ -17,7 +17,7 @@ except Exception:  # pragma: no cover - library may not be installed
 
         pass
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class Enricher:

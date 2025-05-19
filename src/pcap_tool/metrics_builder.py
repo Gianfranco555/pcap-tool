@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import logging
+from pcap_tool.logging import get_logger
 from typing import Any, Dict, List
 
 import pandas as pd
@@ -15,7 +15,7 @@ from .enrich.service_guesser import guess_service
 from .analyze import PerformanceAnalyzer, ErrorSummarizer, SecurityAuditor
 from heuristics.engine import HeuristicEngine
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class MetricsBuilder:
