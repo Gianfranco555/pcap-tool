@@ -101,9 +101,11 @@ class MetricsBuilder:
         # Service overview
         service_overview: Dict[str, Dict[str, int]] = {}
         if not tagged_flow_df.empty:
+            ip_series = tagged_flow_df.get("destination_ip")
+            if ip_series is None:
+                ip_series = tagged_flow_df.get("dest_ip", pd.Series(dtype=object))
             unique_external_ips = (
-                tagged_flow_df.get("destination_ip")
-                .dropna()
+                ip_series.dropna()
                 .astype(str)
                 .unique()
                 .tolist()
@@ -114,9 +116,9 @@ class MetricsBuilder:
         enriched_ips_data = self.enricher.enrich_ips(unique_external_ips)
 
         for _, row in tagged_flow_df.iterrows():
-            dest_ip = row.get("destination_ip")
+            dest_ip = row.get("destination_ip", row.get("dest_ip"))
             protocol = row.get("protocol")
-            port = row.get("destination_port")
+            port = row.get("destination_port", row.get("dest_port"))
             sni = row.get("sni") or row.get("server_name_indication")
             http_host = row.get("http_request_host_header")
             ip_info = enriched_ips_data.get(str(dest_ip), {})
@@ -181,11 +183,12 @@ class MetricsBuilder:
                         (tagged_flow_df["start_time"] <= ts_dt)
                         & (tagged_flow_df["end_time"] >= ts_dt)
                     ]
+                    flow_series = active.sort_values("bytes_total", ascending=False).head(5).get(
+                        "flow_id",
+                        pd.Series(dtype=object),
+                    )
                     top_flows = (
-                        active.sort_values("bytes_total", ascending=False)
-                        .head(5)
-                        .get("flow_id")
-                        .dropna()
+                        flow_series.dropna()
                         .astype(str)
                         .tolist()
                     )
