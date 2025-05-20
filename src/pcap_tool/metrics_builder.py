@@ -17,6 +17,10 @@ from heuristics.engine import HeuristicEngine
 
 logger = get_logger(__name__)
 
+# Country codes considered "common" in most enterprise traffic. Connections to
+# destinations outside this set are flagged as unusual.
+DEFAULT_COMMON_COUNTRIES = {"US", "CA", "GB", "DE", "FR", "NL", "JP", "AU"}
+
 
 class MetricsBuilder:
     """Aggregate metrics from various processors."""
@@ -109,6 +113,12 @@ class MetricsBuilder:
                 .astype(str)
                 .unique()
                 .tolist()
+            )
+            country_map = {ip: self.enricher.get_country(ip) for ip in unique_external_ips}
+            dest_country_series = ip_series.astype(str).map(country_map)
+            tagged_flow_df["dest_country"] = dest_country_series
+            tagged_flow_df["is_unusual_country"] = dest_country_series.apply(
+                lambda c: False if pd.isna(c) or c in DEFAULT_COMMON_COUNTRIES else True
             )
         else:
             unique_external_ips = []

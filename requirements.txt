@@ -44,3 +44,4 @@ requests                        # General-purpose HTTP library (often a dependen
 reportlab
 radon
 pdoc
+geoip2>=4.8.0

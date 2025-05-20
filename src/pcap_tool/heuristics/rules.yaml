@@ -15,3 +15,7 @@ rules:
     predicate: any
     flow_disposition: Unknown
     flow_cause: "Undetermined"
+  - name: Unusual Country
+    predicate: any
+    flow_cause: "Unusual destination country"
+    flow_disposition: Unusual
