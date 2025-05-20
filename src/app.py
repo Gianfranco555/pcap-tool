@@ -16,6 +16,7 @@ from pcap_tool.metrics.retransmission import categorize_retransmission_severity
 import pandas as pd
 import streamlit as st
 import altair as alt
+import plotly.express as px
 
 from pcap_tool.pipeline_app import run_analysis
 
@@ -124,6 +125,24 @@ if metrics_output is not None:
         st.dataframe(tagged_flow_df, use_container_width=True)
         if "sparkline_bytes_c2s" in tagged_flow_df.columns:
             st.caption("Sparkline columns represent per-second byte counts")
+        if not tagged_flow_df.empty and {
+            "protocol",
+            "flow_outcome",
+        }.issubset(tagged_flow_df.columns):
+            chart_df = (
+                tagged_flow_df.groupby(["protocol", "flow_outcome"])
+                .size()
+                .reset_index(name="count")
+            )
+            fig = px.bar(
+                chart_df,
+                x="protocol",
+                y="count",
+                color="flow_outcome",
+                title="Flow Outcomes by Protocol",
+                labels={"count": "Flow Count"},
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
     with errors_tab:
         st.subheader("Error Summary")
