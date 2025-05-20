@@ -103,7 +103,8 @@ if metrics_output is not None:
                 .mark_arc()
                 .encode(theta="count", color="protocol")
             )
-            st.altair_chart(chart, use_container_width=True)
+            with st.container():
+                st.altair_chart(chart, use_container_width=True)
 
         port_counts = metrics_output.get("top_ports", {})
         if port_counts:
@@ -120,7 +121,8 @@ if metrics_output is not None:
                 .mark_bar()
                 .encode(x="port:N", y="count:Q", color="protocol:N")
             )
-            st.altair_chart(chart, use_container_width=True)
+            with st.container():
+                st.altair_chart(chart, use_container_width=True)
 
         tls_version_counts = metrics_output.get("tls_version_counts", {})
         if tls_version_counts:
@@ -134,7 +136,8 @@ if metrics_output is not None:
                 orientation="h",
                 title="Observed TLS Versions",
             )
-            st.plotly_chart(fig, use_container_width=True)
+            with st.container():
+                st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("No TLS traffic detected")
 
@@ -167,7 +170,8 @@ if metrics_output is not None:
                 title="Flow Outcomes by Protocol",
                 labels={"count": "Flow Count"},
             )
-            st.plotly_chart(fig, use_container_width=True)
+            with st.container():
+                st.plotly_chart(fig, use_container_width=True)
 
     with errors_tab:
         st.subheader("Error Summary")
@@ -232,7 +236,8 @@ if metrics_output is not None:
                 hovermode="x unified",
             )
 
-            st.plotly_chart(fig, use_container_width=True)
+            with st.container():
+                st.plotly_chart(fig, use_container_width=True)
 
     with ai_tab:
         st.markdown(text_summary)
