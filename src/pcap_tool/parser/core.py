@@ -1070,7 +1070,25 @@ def _estimate_total_packets(path: Path) -> Optional[int]:
             for line in proc.stdout.splitlines():
                 if "Number of packets" in line:
                     count_str = line.split(":", 1)[1].strip().replace(",", "")
-                    count = int(count_str)
+                    suffix = count_str[-1].lower() if count_str else ""
+                    multiplier = {
+                        "k": 1_000,
+                        "m": 1_000_000,
+                        "g": 1_000_000_000,
+                    }.get(suffix)
+                    if multiplier:
+                        try:
+                            num = float(count_str[:-1].strip())
+                            count = int(num * multiplier)
+                        except ValueError:
+                            logger.debug("Could not parse packet count: %s", count_str)
+                            continue
+                    else:
+                        try:
+                            count = int(count_str)
+                        except ValueError:
+                            logger.debug("Could not parse packet count: %s", count_str)
+                            continue
                     logger.debug("Parsed packet count: %s", count)
                     return count
         except (subprocess.SubprocessError, FileNotFoundError) as exc:  # pragma: no cover - best effort only
