@@ -11,6 +11,8 @@ import json
 import tempfile
 from pathlib import Path
 
+from pcap_tool.metrics.retransmission import categorize_retransmission_severity
+
 import pandas as pd
 import streamlit as st
 import altair as alt
@@ -19,6 +21,10 @@ from pcap_tool.pipeline_app import run_analysis
 
 st.set_page_config(page_title="PCAP Analysis Tool")
 st.title("PCAP Analysis Tool")
+
+THEME_PATH = Path(__file__).resolve().parent / "streamlit_theme.css"
+if THEME_PATH.exists():
+    st.markdown(f"<style>{THEME_PATH.read_text()}</style>", unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader(
     "Upload a PCAP or PCAP-ng file (≤ 5 GB)",
@@ -72,6 +78,17 @@ if metrics_output is not None:
             st.json(capture)
         if perf:
             st.subheader("Performance Metrics")
+            sev = categorize_retransmission_severity(
+                perf.get("tcp_retransmission_ratio_percent", 0.0)
+            )
+            st.markdown(
+                f"""
+    <span class="status-pill" style="background:{sev['color']};">
+        {sev['status']}
+    </span>
+    """,
+                unsafe_allow_html=True,
+            )
             st.json(perf)
 
         proto_counts = metrics_output.get("protocols", {})
