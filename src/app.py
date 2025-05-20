@@ -111,6 +111,26 @@ if metrics_output is not None:
     with errors_tab:
         st.subheader("Error Summary")
         st.json(metrics_output.get("error_summary", {}))
+        err_df = pd.DataFrame()
+        required_cols = {
+            "packet_error_reason",
+            "flow_id",
+            "total_bytes",
+            "first_ts",
+        }
+        if not tagged_flow_df.empty and required_cols.issubset(tagged_flow_df.columns):
+            err_df = (
+                tagged_flow_df.dropna(subset=["packet_error_reason"])
+                .groupby("packet_error_reason")
+                .agg(
+                    affected_flows=("flow_id", "nunique"),
+                    total_bytes=("total_bytes", "sum"),
+                    first_seen=("first_ts", "min"),
+                )
+                .reset_index()
+            )
+        st.subheader("Network Errors")
+        st.dataframe(err_df, use_container_width=True)
         st.subheader("Security Findings")
         st.json(metrics_output.get("security_findings", {}))
 
