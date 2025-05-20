@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, TYPE_CHECKING
 import pandas as pd
 from ..utils import coalesce
 
-from ..enrichment import Enricher
+if TYPE_CHECKING:  # pragma: no cover - for type hints only
+    from ..enrichment import Enricher
 
 
 class SecurityAuditor:

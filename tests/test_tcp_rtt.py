@@ -4,6 +4,7 @@ from pathlib import Path
 
 from pcap_tool.parser import parse_pcap_to_df
 from pcap_tool.heuristics.metrics import compute_tcp_rtt_stats
+from pcap_tool.analyze.performance_analyzer import PerformanceAnalyzer
 
 
 def _create_pcap(packets, tmp_path: Path, name: str) -> Path:
@@ -48,3 +49,16 @@ def test_compute_tcp_rtt_stats_empty():
     assert result["samples"] == 0
     assert result["median"] is None
     assert "reason" in result
+
+
+def test_collect_rtt_samples_basic(handshake_pcap: Path):
+    df = parse_pcap_to_df(str(handshake_pcap))
+    samples = PerformanceAnalyzer.collect_rtt_samples(df)
+    assert len(samples) == 1
+    assert 999 <= samples[0] <= 1001
+
+
+def test_collect_rtt_samples_none(syn_only_pcap: Path):
+    df = parse_pcap_to_df(str(syn_only_pcap))
+    samples = PerformanceAnalyzer.collect_rtt_samples(df)
+    assert samples == []
