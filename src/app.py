@@ -45,7 +45,15 @@ analysis_ran = False
 
 if uploaded_file and st.button("Parse & Analyze"):
     analysis_ran = True
-    progress = st.progress(0, text="Processing PCAP…")
+    progress = st.progress(0.0, text="Processing PCAP…")
+
+    def update_progress(count: int, total: int | None) -> None:
+        value = count / total if total else 0.0
+        text = (
+            f"Processing PCAP… ({count}/{total})" if total else f"Processing packet {count}"
+        )
+        progress.progress(min(value, 1.0), text=text)
+
     temp_file_path = None
     try:
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pcap") as tmp:
@@ -53,7 +61,9 @@ if uploaded_file and st.button("Parse & Analyze"):
             temp_file_path = tmp.name
 
         rules_path = Path(__file__).resolve().parent / "heuristics" / "rules.yaml"
-        metrics_output, tagged_flow_df, text_summary, pdf_bytes = run_analysis(Path(temp_file_path), rules_path)
+        metrics_output, tagged_flow_df, text_summary, pdf_bytes = run_analysis(
+            Path(temp_file_path), rules_path, on_progress=update_progress
+        )
         progress.progress(1.0, text="Analysis complete")
     except Exception as exc:
         progress.empty()
