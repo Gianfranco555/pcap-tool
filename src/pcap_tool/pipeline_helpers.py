@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 import pandas as pd
 
@@ -81,11 +81,25 @@ def _clean_int_columns(df: pd.DataFrame) -> None:
             df[col] = safe_int(df[col], FILL_VALUES.get(col, 0))
 
 
-def load_packets(pcap_path: Path) -> List[PcapRecord]:
-    """Parse ``pcap_path`` into a list of :class:`PcapRecord`."""
+def load_packets(
+    pcap_path: Path,
+    on_progress: Callable[[int, int | None], None] | None = None,
+) -> List[PcapRecord]:
+    """Parse ``pcap_path`` into :class:`PcapRecord` objects.
+
+    Parameters
+    ----------
+    pcap_path:
+        Location of the PCAP or PCAP-ng file to parse.
+    on_progress:
+        Optional callback receiving the count of packets processed and an
+        estimated total. When provided, this is forwarded to
+        :func:`iter_parsed_frames` so callers can report progress.
+    """
+
     records: List[PcapRecord] = []
     field_set = set(PcapRecord.__dataclass_fields__.keys())
-    for chunk in iter_parsed_frames(pcap_path):
+    for chunk in iter_parsed_frames(pcap_path, on_progress=on_progress):
         for row in chunk.itertuples(index=False):
             data = {k: getattr(row, k) for k in field_set if hasattr(row, k)}
             records.append(PcapRecord(**data))

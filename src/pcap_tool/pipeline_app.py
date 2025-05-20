@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
-from typing import List, Tuple
+from typing import Callable, List, Tuple
 
 import pandas as pd
 from .models import PcapRecord
@@ -56,10 +56,14 @@ def _flow_cache_key(record: PcapRecord) -> str:
     return f"UNKNOWN_FLOW_{record.frame_number}"
 
 
-def run_analysis(pcap_path: Path, rules_path: Path) -> Tuple[dict, pd.DataFrame, str, bytes]:
+def run_analysis(
+    pcap_path: Path,
+    rules_path: Path,
+    on_progress: Callable[[int, int | None], None] | None = None,
+) -> Tuple[dict, pd.DataFrame, str, bytes]:
     """Run the full analysis pipeline and return outputs."""
 
-    records = load_packets(pcap_path)
+    records = load_packets(pcap_path, on_progress=on_progress)
     stats = collect_stats(records)
 
     enricher = Enricher()
