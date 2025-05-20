@@ -122,8 +122,16 @@ if metrics_output is not None:
             st.altair_chart(chart, use_container_width=True)
 
     with flows_tab:
-        st.dataframe(tagged_flow_df, use_container_width=True)
-        if "sparkline_bytes_c2s" in tagged_flow_df.columns:
+        flows_df = tagged_flow_df
+        options = flows_df["l7_protocol_guess"].dropna().unique().tolist()
+        sel = st.multiselect("Filter by L7 Protocol", options)
+        if sel:
+            flows_show = flows_df[flows_df["l7_protocol_guess"].isin(sel)]
+        else:
+            flows_show = flows_df
+
+        st.dataframe(flows_show, use_container_width=True)
+        if "sparkline_bytes_c2s" in flows_df.columns:
             st.caption("Sparkline columns represent per-second byte counts")
         if not tagged_flow_df.empty and {
             "protocol",
