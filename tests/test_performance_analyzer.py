@@ -45,6 +45,7 @@ def test_tcp_rtt_basic():
     assert rtt["samples"] == 1
     assert 199 <= rtt["median"] <= 201
     assert summary["tcp_retransmission_ratio_percent"] == 0.0
+    assert summary["rtt_limited_data"] is False
 
 
 def test_tcp_retransmission_ratio():
@@ -60,3 +61,17 @@ def test_tcp_retransmission_ratio():
 
     summary = analyzer.get_summary()
     assert summary["tcp_retransmission_ratio_percent"] == 25.0
+
+
+def test_rtt_limited_data_flag():
+    analyzer = PerformanceAnalyzer()
+    syn = PcapRecord(
+        frame_number=1,
+        timestamp=1.0,
+        protocol="TCP",
+        tcp_flags_syn=True,
+        tcp_flags_ack=False,
+    )
+    analyzer.add_packet(syn, "f", True)
+    summary = analyzer.get_summary()
+    assert summary["rtt_limited_data"] is True

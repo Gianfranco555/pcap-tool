@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Dict, List
 import numpy as np
+import pandas as pd
 
 from ..models import PcapRecord
 from ..utils import safe_int_or_default
@@ -23,6 +24,51 @@ class PerformanceAnalyzer:
         self.tcp_retransmissions: int = 0
         # Placeholder for potential QUIC tracking
         # self.quic_initial_packets: Dict[str, float] = {}
+
+    @staticmethod
+    def collect_rtt_samples(packets_df: pd.DataFrame) -> List[float]:
+        """Return RTT samples in ms from SYN/SYN-ACK pairs in ``packets_df``."""
+
+        if packets_df.empty:
+            return []
+
+        df = packets_df.sort_values("timestamp")
+        syn_times: Dict[tuple[str, int, str, int, str], float] = {}
+        rtts: List[float] = []
+
+        for row in df.itertuples(index=False):
+            proto = getattr(row, "protocol", None)
+            if not proto or str(proto).upper() != "TCP":
+                continue
+
+            is_client = getattr(row, "is_source_client", None)
+            if is_client is None:
+                is_client = getattr(row, "is_src_client", None)
+
+            syn = getattr(row, "tcp_flags_syn", False)
+            ack = getattr(row, "tcp_flags_ack", False)
+
+            src_ip = getattr(row, "source_ip", None)
+            dst_ip = getattr(row, "destination_ip", None)
+            src_port = safe_int_or_default(getattr(row, "source_port", None), 0)
+            dst_port = safe_int_or_default(getattr(row, "destination_port", None), 0)
+
+            if is_client and syn and not ack:
+                key = (src_ip or "", src_port, dst_ip or "", dst_port, "TCP")
+                if key not in syn_times:
+                    syn_times[key] = getattr(row, "timestamp", 0.0)
+                continue
+
+            if not is_client and syn and ack:
+                rev_key = (dst_ip or "", dst_port, src_ip or "", src_port, "TCP")
+                syn_ts = syn_times.get(rev_key)
+                if syn_ts is not None:
+                    diff = getattr(row, "timestamp", 0.0) - syn_ts
+                    if 0 <= diff <= 3.0:
+                        rtts.append(diff * 1000.0)
+                    del syn_times[rev_key]
+
+        return rtts
 
     def add_packet(self, record: PcapRecord, flow_id_str: str, is_client_packet: bool) -> None:
         """Add a packet to the analyzer.
@@ -78,8 +124,10 @@ class PerformanceAnalyzer:
                 "max": float(arr.max()),
                 "samples": len(self.rtt_samples_ms),
             }
+            rtt_limited = False
         else:
             rtt_summary = {"median": None, "p95": None, "min": None, "max": None, "samples": 0}
+            rtt_limited = True
 
         if self.tcp_total_packets:
             retrans_percent = (self.tcp_retransmissions / self.tcp_total_packets) * 100
@@ -89,4 +137,5 @@ class PerformanceAnalyzer:
         return {
             "tcp_rtt_ms": rtt_summary,
             "tcp_retransmission_ratio_percent": retrans_percent,
+            "rtt_limited_data": rtt_limited,
         }

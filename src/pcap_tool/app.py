@@ -101,7 +101,17 @@ if metrics_output is not None:
     """,
                 unsafe_allow_html=True,
             )
-            st.json(perf)
+            if perf.get("rtt_limited_data"):
+                st.markdown(
+                    "<span class='status-pill' style='background:#ffc107;color:black;'>Limited RTT data available</span>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.json(perf.get("tcp_rtt_ms", {}))
+            st.write(
+                "Retransmission Ratio: "
+                f"{perf.get('tcp_retransmission_ratio_percent', 0.0):.2f}%"
+            )
 
         proto_counts = metrics_output.get("protocols", {})
         if proto_counts:
