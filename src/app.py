@@ -14,6 +14,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 import altair as alt
+import plotly.express as px
 
 from pcap_tool.pipeline_app import run_analysis
 
@@ -102,6 +103,22 @@ if metrics_output is not None:
                 .encode(x="port:N", y="count:Q", color="protocol:N")
             )
             st.altair_chart(chart, use_container_width=True)
+
+        tls_version_counts = metrics_output.get("tls_version_counts", {})
+        if tls_version_counts:
+            tls_df = pd.DataFrame(
+                tls_version_counts.items(), columns=["version", "count"]
+            )
+            fig = px.bar(
+                tls_df,
+                x="count",
+                y="version",
+                orientation="h",
+                title="Observed TLS Versions",
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No TLS traffic detected")
 
     with flows_tab:
         st.dataframe(tagged_flow_df, use_container_width=True)
