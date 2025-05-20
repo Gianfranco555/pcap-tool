@@ -28,3 +28,6 @@ pip-wheel-metadata/
 
 # OS specific
 Thumbs.db
+
+# Documentation build artifacts
+docs/_build/
