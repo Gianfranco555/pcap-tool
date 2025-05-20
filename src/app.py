@@ -121,6 +121,22 @@ if metrics_output is not None:
             )
             st.altair_chart(chart, use_container_width=True)
 
+        tls_version_counts = metrics_output.get("tls_version_counts", {})
+        if tls_version_counts:
+            tls_df = pd.DataFrame(
+                tls_version_counts.items(), columns=["version", "count"]
+            )
+            fig = px.bar(
+                tls_df,
+                x="count",
+                y="version",
+                orientation="h",
+                title="Observed TLS Versions",
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No TLS traffic detected")
+
     with flows_tab:
         flows_df = tagged_flow_df
         options = flows_df["l7_protocol_guess"].dropna().unique().tolist()

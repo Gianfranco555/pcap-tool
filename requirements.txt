@@ -35,6 +35,9 @@ tiktoken                        # For token counting with OpenAI models (often n
 streamlit
 plotly
 
+# Charting
+plotly
+
 # Utilities
 python-dotenv                   # For loading .env files (as per README)
 requests                        # General-purpose HTTP library (often a dependency or useful for integrations)
