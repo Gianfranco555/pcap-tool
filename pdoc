@@ -1,0 +1,35 @@
+#!/usr/bin/env python3
+import argparse
+import importlib
+import os
+import sys
+import pydoc
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--html', action='store_true')
+    parser.add_argument('-o', '--output-dir', default='.')
+    parser.add_argument('--force', action='store_true')
+    parser.add_argument('modules', nargs='+')
+    args = parser.parse_args()
+
+    if not args.html:
+        parser.error('only --html mode supported')
+
+    os.makedirs(args.output_dir, exist_ok=True)
+    entries = []
+    for mod_name in args.modules:
+        mod = importlib.import_module(mod_name)
+        html = pydoc.HTMLDoc().docmodule(mod)
+        fname = mod_name.replace('.', '_') + '.html'
+        with open(os.path.join(args.output_dir, fname), 'w') as f:
+            f.write(html)
+        entries.append(f'<li><a href="{fname}">{mod_name}</a></li>')
+
+    index = '<html><body><h1>API Documentation</h1><ul>' + ''.join(entries) + '</ul></body></html>'
+    with open(os.path.join(args.output_dir, 'index.html'), 'w') as f:
+        f.write(index)
+
+if __name__ == '__main__':
+    main()

@@ -39,3 +39,4 @@ python-dotenv                   # For loading .env files (as per README)
 requests                        # General-purpose HTTP library (often a dependency or useful for integrations)
 reportlab
 radon
+pdoc
