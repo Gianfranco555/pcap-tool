@@ -93,6 +93,9 @@ These changes keep the codebase production-ready while letting you run everythin
     pip install --upgrade pip
     pip install -r requirements.txt
     ```
+    Download the free MaxMind GeoLite2-Country database and place the
+    `GeoLite2-Country.mmdb` file in a known location (e.g. `./data`) so the
+    enrichment step can resolve country codes.
 5.  **Set up environment variables:**
     ```bash
     cp .env.example .env

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from pcap_tool.logging import get_logger
 import socket
-from typing import Any, Optional
+from functools import lru_cache
+from typing import Any, Callable, Optional
 
 try:
     from geoip2.database import Reader
@@ -27,6 +28,7 @@ class Enricher:
         self,
         geoip_city_db_path: Optional[str] = None,
         geoip_asn_db_path: Optional[str] = None,
+        geoip_country_db_path: Optional[str] = None,
     ) -> None:
         """Initialize the Enricher.
 
@@ -40,9 +42,12 @@ class Enricher:
 
         self.geoip_city_db_path = geoip_city_db_path
         self.geoip_asn_db_path = geoip_asn_db_path
+        self.geoip_country_db_path = geoip_country_db_path
         self.geoip_city_reader: Reader | None = None
         self.geoip_asn_reader: Reader | None = None
+        self.geoip_country_reader: Reader | None = None
         self._rdns_cache: dict[str, str | None] = {}
+        self._country_lookup_cached: Callable[[str], str | None] | None = None
 
         if geoip_city_db_path and Reader is not None:
             logger.debug("GeoIP City database path provided: %s", geoip_city_db_path)
@@ -57,6 +62,14 @@ class Enricher:
                 self.geoip_asn_reader = Reader(geoip_asn_db_path)
             except Exception:
                 logger.exception("Failed to open GeoIP ASN database at %s", geoip_asn_db_path)
+
+        if geoip_country_db_path and Reader is not None:
+            logger.debug("GeoIP Country database path provided: %s", geoip_country_db_path)
+            try:
+                self.geoip_country_reader = Reader(geoip_country_db_path)
+                self._country_lookup_cached = lru_cache(maxsize=10000)(self._lookup_country)  # type: ignore[misc]
+            except Exception:
+                logger.exception("Failed to open GeoIP Country database at %s", geoip_country_db_path)
 
     def enrich_ips(self, ips: list[str]) -> dict[str, dict[str, Any]]:
         """Return enrichment information for a list of IP addresses."""
@@ -134,3 +147,22 @@ class Enricher:
         finally:
             if timeout is not None:
                 socket.setdefaulttimeout(old_timeout)
+
+    def _lookup_country(self, ip: str) -> Optional[str]:
+        if not self.geoip_country_reader or Reader is None:
+            return None
+        try:
+            resp = self.geoip_country_reader.country(ip)
+        except AddressNotFoundError:
+            logger.info("GeoIP country not found: %s", ip)
+            return None
+        except Exception:
+            logger.exception("GeoIP country lookup failed for %s", ip)
+            return None
+        return getattr(resp.country, "iso_code", None)
+
+    def get_country(self, ip: str) -> Optional[str]:
+        """Return the ISO country code for ``ip`` if available."""
+        if self._country_lookup_cached is None:
+            return None
+        return self._country_lookup_cached(ip)

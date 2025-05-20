@@ -12,7 +12,7 @@ from ..enrichment import Enricher
 class SecurityAuditor:
     """Summarize security related findings from flows."""
 
-    UNUSUAL_COUNTRIES = {"North Korea", "Iran", "Syria", "Sudan"}
+    DEFAULT_COMMON_COUNTRIES = {"US", "CA", "GB", "DE", "FR", "NL", "JP", "AU"}
 
     def __init__(self, enricher: Enricher) -> None:
         self.enricher = enricher
@@ -53,21 +53,36 @@ class SecurityAuditor:
                 coalesce(self_signed_series, False).astype(bool).sum()
             )
 
-        enriched_ips = self.enricher.enrich_ips(unique_external_ips)
         unusual_connections: Dict[str, str] = {}
 
-        for idx, row in tagged_flow_df.iterrows():
-            dest_ip = row.get("destination_ip", row.get("dest_ip"))
-            if pd.isna(dest_ip):
-                continue
-            info = enriched_ips.get(str(dest_ip))
-            if not info:
-                continue
-            country = (info.get("geo") or {}).get("country")
-            if country in self.UNUSUAL_COUNTRIES:
+        if "dest_country" in tagged_flow_df.columns:
+            is_unusual = tagged_flow_df.get("is_unusual_country")
+            if is_unusual is None:
+                is_unusual = tagged_flow_df["dest_country"].apply(
+                    lambda c: False if pd.isna(c) or c in self.DEFAULT_COMMON_COUNTRIES else True
+                )
+            for idx, row in tagged_flow_df.iterrows():
+                if not is_unusual.iloc[idx]:
+                    continue
+                country = row.get("dest_country")
                 flow_id = row.get("flow_id")
                 flow_key = str(flow_id) if pd.notna(flow_id) else str(idx)
-                unusual_connections[flow_key] = country
+                if pd.notna(country):
+                    unusual_connections[flow_key] = str(country)
+        else:
+            enriched_ips = self.enricher.enrich_ips(unique_external_ips)
+            for idx, row in tagged_flow_df.iterrows():
+                dest_ip = row.get("destination_ip", row.get("dest_ip"))
+                if pd.isna(dest_ip):
+                    continue
+                country = self.enricher.get_country(str(dest_ip))
+                if not country:
+                    info = enriched_ips.get(str(dest_ip))
+                    country = (info.get("geo") or {}).get("country") if info else None
+                if country and country not in self.DEFAULT_COMMON_COUNTRIES:
+                    flow_id = row.get("flow_id")
+                    flow_key = str(flow_id) if pd.notna(flow_id) else str(idx)
+                    unusual_connections[flow_key] = country
 
         result["connections_to_unusual_countries"] = unusual_connections
         return result

@@ -10,6 +10,9 @@ class FakeEnricher:
     def enrich_ips(self, ips):
         return {ip: self.mapping.get(ip, {"geo": {"country": "USA"}}) for ip in ips}
 
+    def get_country(self, ip):
+        return self.mapping.get(ip, {}).get("country_code", "US")
+
 
 def test_audit_flows_basic():
     df = pd.DataFrame(
@@ -22,11 +25,11 @@ def test_audit_flows_basic():
         }
     )
 
-    enricher = FakeEnricher({"3.3.3.3": {"geo": {"country": "Iran"}}})
+    enricher = FakeEnricher({"3.3.3.3": {"geo": {"country": "Iran"}, "country_code": "IR"}})
     auditor = SecurityAuditor(enricher)
     result = auditor.audit_flows(df, ["8.8.8.8", "3.3.3.3", "5.5.5.5", "6.6.6.6"])
 
     assert result["plaintext_http_flows"] == 1
     assert result["self_signed_certificate_flows"] == 1
     assert result["outdated_tls_version_counts"] == {"TLS 1.0": 1, "TLS 1.1": 1}
-    assert result["connections_to_unusual_countries"] == {"2": "Iran"}
+    assert result["connections_to_unusual_countries"] == {"2": "IR"}
