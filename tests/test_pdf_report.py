@@ -1,6 +1,6 @@
 import pytest
 
-from pcap_tool.pdf_report import generate_pdf_report
+from pcap_tool.pdf_report import generate_pdf_report, _build_elements
 from pcap_tool.exceptions import ReportGenerationError
 
 
@@ -33,3 +33,24 @@ def test_generate_pdf_report_error(monkeypatch):
 
     with pytest.raises(ReportGenerationError):
         generate_pdf_report({})
+
+
+def test_capture_summary_section():
+    metrics = {
+        "capture_info": {
+            "filename": "summary.pcap",
+            "file_size": 1024,
+            "total_packets": 5,
+            "capture_duration": 1.2,
+        }
+    }
+    try:
+        from reportlab.lib.styles import getSampleStyleSheet
+    except Exception:
+        pytest.skip("ReportLab not installed")
+
+    styles = getSampleStyleSheet()
+    elements = _build_elements(metrics, None, styles)
+    texts = [e.text for e in elements if hasattr(e, "text")]
+    assert "Capture Summary" in texts
+    assert any("Filename" in t for t in texts)

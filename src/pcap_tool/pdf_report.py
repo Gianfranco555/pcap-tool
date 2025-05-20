@@ -26,7 +26,27 @@ def _build_elements(metrics_json: Dict[str, Any], flows_df: Optional[pd.DataFram
     elements.append(Spacer(1, 12))
 
     if capture_info:
-        for k, v in capture_info.items():
+        elements.append(Paragraph("Capture Summary", styles["Heading2"]))
+        filename = capture_info.get("filename")
+        if filename is not None:
+            elements.append(Paragraph(f"Filename: {filename}", styles["Normal"]))
+        size = capture_info.get("file_size")
+        if size is not None:
+            elements.append(Paragraph(f"File size: {size}", styles["Normal"]))
+        packets = capture_info.get("total_packets")
+        if packets is not None:
+            elements.append(Paragraph(f"Total packets: {packets}", styles["Normal"]))
+        duration = capture_info.get("capture_duration")
+        if duration is not None:
+            elements.append(Paragraph(f"Capture duration: {duration}", styles["Normal"]))
+
+        other_keys = {
+            k: v
+            for k, v in capture_info.items()
+            if k
+            not in {"filename", "file_size", "total_packets", "capture_duration"}
+        }
+        for k, v in other_keys.items():
             elements.append(Paragraph(f"{k}: {v}", styles["Normal"]))
         elements.append(Spacer(1, 12))
 
