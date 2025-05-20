@@ -1,7 +1,7 @@
 import openai
 from unittest.mock import Mock, patch
 
-from llm_summarizer import LLMSummarizer
+from pcap_tool.llm_summarizer import LLMSummarizer
 
 
 def test_generate_text_summary_basic():
