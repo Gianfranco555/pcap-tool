@@ -1,6 +1,7 @@
 import pytest
 
 from pcap_tool.pdf_report import generate_pdf_report
+from pcap_tool.exceptions import ReportGenerationError
 
 
 def test_generate_pdf_report_basic():
@@ -22,3 +23,13 @@ def test_generate_pdf_report_basic():
         pytest.skip("ReportLab not installed")
     assert isinstance(pdf_bytes, (bytes, bytearray))
     assert len(pdf_bytes) > 0
+
+
+def test_generate_pdf_report_error(monkeypatch):
+    def boom(*args, **kwargs):
+        raise ValueError("boom")
+
+    monkeypatch.setattr("pcap_tool.pdf_report._build_elements", boom)
+
+    with pytest.raises(ReportGenerationError):
+        generate_pdf_report({})

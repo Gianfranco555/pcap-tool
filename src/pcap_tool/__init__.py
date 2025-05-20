@@ -8,7 +8,8 @@ from .parser import (
 from .models import PcapRecord, ParsedHandle
 from .pdf_report import generate_pdf_report
 from .summary import generate_summary_df, export_summary_excel
-from .utils import export_to_csv
+from .utils import export_to_csv, anonymize_ip
+from .ai import prepare_ai_data
 from .metrics.stats_collector import StatsCollector
 from .analyze import PerformanceAnalyzer, ErrorSummarizer
 
@@ -24,6 +25,8 @@ __all__ = [
     "generate_summary_df",
     "export_summary_excel",
     "export_to_csv",
+    "anonymize_ip",
+    "prepare_ai_data",
     "StatsCollector",
     "PerformanceAnalyzer",
     "ErrorSummarizer",
