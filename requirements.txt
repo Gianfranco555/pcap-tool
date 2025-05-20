@@ -33,6 +33,7 @@ tiktoken                        # For token counting with OpenAI models (often n
 
 # Streamlit UI (As per Action Plan for UI development)
 streamlit
+plotly
 
 # Utilities
 python-dotenv                   # For loading .env files (as per README)
