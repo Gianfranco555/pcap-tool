@@ -12,6 +12,7 @@ from .utils import export_to_csv, anonymize_ip
 from .ai import prepare_ai_data
 from .metrics.stats_collector import StatsCollector
 from .analyze import PerformanceAnalyzer, ErrorSummarizer
+from .heuristics.engine import VectorisedHeuristicEngine
 
 
 __all__ = [
@@ -30,4 +31,5 @@ __all__ = [
     "StatsCollector",
     "PerformanceAnalyzer",
     "ErrorSummarizer",
+    "VectorisedHeuristicEngine",
 ]

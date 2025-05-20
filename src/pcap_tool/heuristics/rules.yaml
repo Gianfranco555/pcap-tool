@@ -1,0 +1,17 @@
+rules:
+  - name: Allowed session
+    predicate: allowed
+    flow_disposition: Allowed
+    flow_cause: "Completed TCP session with data exchange"
+  - name: Blocked by RST
+    predicate: blocked_rst
+    flow_disposition: Blocked
+    flow_cause: "TCP RST from destination after SYN"
+  - name: Degraded by ICMP
+    predicate: icmp_degraded
+    flow_disposition: Degraded
+    flow_cause: "ICMP Destination Unreachable/Time Exceeded in flow"
+  - name: Unknown
+    predicate: any
+    flow_disposition: Unknown
+    flow_cause: "Undetermined"
