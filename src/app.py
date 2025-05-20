@@ -17,6 +17,7 @@ import pandas as pd
 import streamlit as st
 import altair as alt
 import plotly.express as px
+import plotly.graph_objects as go
 
 from pcap_tool.pipeline_app import run_analysis
 
@@ -197,19 +198,41 @@ if metrics_output is not None:
     with timeline_tab:
         timeline = metrics_output.get("timeline_data", [])
         if timeline:
-            tl_df = pd.DataFrame(timeline)
-            area = (
-                alt.Chart(tl_df)
-                .mark_area(opacity=0.6)
-                .encode(x="timestamp:Q", y="bytes:Q")
+            tl_df = pd.DataFrame(timeline).rename(columns={"timestamp": "ts"})
+
+            fig = go.Figure()
+            fig.add_trace(
+                go.Scatter(
+                    x=tl_df["ts"],
+                    y=tl_df["bytes"],
+                    mode="lines",
+                    name="Bytes",
+                    fill="tozeroy",
+                    yaxis="y1",
+                )
             )
-            spikes = tl_df[tl_df.get("spike")]
-            if not spikes.empty:
-                rules = alt.Chart(spikes).mark_rule(color="red").encode(x="timestamp:Q")
-                chart = area + rules
-            else:
-                chart = area
-            st.altair_chart(chart, use_container_width=True)
+
+            if tl_df["packets"].max() > 0:
+                fig.add_trace(
+                    go.Scatter(
+                        x=tl_df["ts"],
+                        y=tl_df["packets"],
+                        mode="lines",
+                        name="Packets",
+                        yaxis="y2",
+                    )
+                )
+                fig.update_layout(
+                    yaxis2=dict(title="Packets", overlaying="y", side="right")
+                )
+
+            fig.update_layout(
+                title="Traffic Timeline",
+                yaxis=dict(title="Bytes"),
+                hovermode="x unified",
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
 
     with ai_tab:
         st.markdown(text_summary)
