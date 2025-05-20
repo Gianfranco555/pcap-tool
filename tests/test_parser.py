@@ -387,11 +387,19 @@ def test_udp_443_not_quic(udp_443_non_quic_pcap):
 
 
 def test_safe_int_parses_commas():
-    from pcap_tool.parser import _safe_int
+    from pcap_tool.parser.helpers import _safe_int
 
     assert _safe_int("1,234") == 1234
     assert _safe_int(None) is None
     assert _safe_int("bad") is None
+
+
+def test_safe_int_edge_cases():
+    from pcap_tool.parser.helpers import _safe_int
+
+    assert _safe_int("-1,234") == -1234
+    assert _safe_int(" 42 ") == 42
+    assert _safe_int("3.14") is None
 
 
 def test_validate_pcap_valid(example_pcap):

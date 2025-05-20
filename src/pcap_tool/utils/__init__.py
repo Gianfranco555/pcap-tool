@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 
 from .pandas_safe import coalesce, safe_int
+from .net import anonymize_ip
 
 
 def export_to_csv(data_to_export: pd.DataFrame, filename: str) -> None:
@@ -32,4 +33,5 @@ __all__ = [
     "safe_int_or_default",
     "safe_int",
     "coalesce",
+    "anonymize_ip",
 ]

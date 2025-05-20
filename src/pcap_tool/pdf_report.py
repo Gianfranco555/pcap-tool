@@ -8,6 +8,102 @@ from typing import Any, Dict, Optional
 import pandas as pd
 
 from .chart_generator import protocol_pie_chart, top_ports_bar_chart
+from .exceptions import ReportGenerationError
+
+
+def _build_elements(metrics_json: Dict[str, Any], flows_df: Optional[pd.DataFrame], styles) -> list:
+    from reportlab.platypus import Paragraph, Spacer, Table, TableStyle, Image
+    from reportlab.lib import colors
+
+    elements: list = []
+
+    capture_info = metrics_json.get("capture_info", {})
+    title_text = "PCAP Analysis Report"
+    if capture_info.get("filename"):
+        title_text += f" - {capture_info['filename']}"
+
+    elements.append(Paragraph(title_text, styles["Title"]))
+    elements.append(Spacer(1, 12))
+
+    if capture_info:
+        for k, v in capture_info.items():
+            elements.append(Paragraph(f"{k}: {v}", styles["Normal"]))
+        elements.append(Spacer(1, 12))
+
+    proto_counts = metrics_json.get("protocols", {})
+    if proto_counts:
+        elements.append(Paragraph("Protocol Distribution", styles["Heading2"]))
+        chart_bytes = protocol_pie_chart(proto_counts)
+        if chart_bytes:
+            elements.append(Image(BytesIO(chart_bytes), width=200, height=200))
+        else:
+            for proto, count in proto_counts.items():
+                elements.append(Paragraph(f"{proto}: {count}", styles["Normal"]))
+        elements.append(Spacer(1, 12))
+
+    port_counts = metrics_json.get("top_ports", {})
+    if port_counts:
+        elements.append(Paragraph("Top Ports", styles["Heading2"]))
+        chart_bytes = top_ports_bar_chart(port_counts)
+        if chart_bytes:
+            elements.append(Image(BytesIO(chart_bytes), width=300, height=200))
+        else:
+            for p, c in port_counts.items():
+                elements.append(Paragraph(f"{p}: {c}", styles["Normal"]))
+        elements.append(Spacer(1, 12))
+
+    if flows_df is not None and not flows_df.empty:
+        elements.append(Paragraph("Top Flows", styles["Heading2"]))
+        display_cols = list(flows_df.columns)
+        table_df = flows_df.head(20).fillna("")
+        data = [display_cols] + table_df.values.tolist()
+        table = Table(data, repeatRows=1)
+        table.setStyle(
+            TableStyle(
+                [
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ]
+            )
+        )
+        elements.append(table)
+        elements.append(Spacer(1, 12))
+
+    perf = metrics_json.get("performance_metrics", {})
+    if perf:
+        elements.append(Paragraph("Performance Metrics", styles["Heading2"]))
+        for k, v in perf.items():
+            elements.append(Paragraph(f"{k}: {v}", styles["Normal"]))
+        elements.append(Spacer(1, 12))
+
+    errors = metrics_json.get("error_summary", {})
+    if errors:
+        elements.append(Paragraph("Error Summary", styles["Heading2"]))
+        for k, v in errors.items():
+            elements.append(Paragraph(f"{k}: {v}", styles["Normal"]))
+        elements.append(Spacer(1, 12))
+
+    sec = metrics_json.get("security_findings", {})
+    if sec:
+        elements.append(Paragraph("Security Findings", styles["Heading2"]))
+        for k, v in sec.items():
+            elements.append(Paragraph(f"{k}: {v}", styles["Normal"]))
+        elements.append(Spacer(1, 12))
+
+    timeline = metrics_json.get("timeline_data", [])
+    spikes = [t for t in timeline if t.get("spike")]
+    if spikes:
+        elements.append(Paragraph("Timeline Spikes", styles["Heading2"]))
+        for spike in spikes:
+            ts = spike.get("timestamp")
+            bytes_ = spike.get("bytes")
+            elements.append(
+                Paragraph(f"Spike at {ts}: {bytes_} bytes", styles["Normal"])
+            )
+        elements.append(Spacer(1, 12))
+
+    return elements
 
 
 def generate_pdf_report(
@@ -52,112 +148,19 @@ def generate_pdf_report(
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)
     styles = getSampleStyleSheet()
-    elements = []
 
-    capture_info = metrics_json.get("capture_info", {})
-    title_text = "PCAP Analysis Report"
-    if capture_info.get("filename"):
-        title_text += f" - {capture_info['filename']}"
-
-    elements.append(Paragraph(title_text, styles["Title"]))
-    elements.append(Spacer(1, 12))
-
-    # Capture Info
-    if capture_info:
-        for k, v in capture_info.items():
-            elements.append(Paragraph(f"{k}: {v}", styles["Normal"]))
-        elements.append(Spacer(1, 12))
-
-    # Protocol distribution
-    proto_counts = metrics_json.get("protocols", {})
-    if proto_counts:
-        elements.append(Paragraph("Protocol Distribution", styles["Heading2"]))
-        chart_bytes = protocol_pie_chart(proto_counts)
-        if chart_bytes:
-            from reportlab.platypus import Image
-
-            elements.append(Image(BytesIO(chart_bytes), width=200, height=200))
-        else:
-            for proto, count in proto_counts.items():
-                elements.append(Paragraph(f"{proto}: {count}", styles["Normal"]))
-        elements.append(Spacer(1, 12))
-
-    # Top ports
-    port_counts = metrics_json.get("top_ports", {})
-    if port_counts:
-        elements.append(Paragraph("Top Ports", styles["Heading2"]))
-        chart_bytes = top_ports_bar_chart(port_counts)
-        if chart_bytes:
-            from reportlab.platypus import Image
-
-            elements.append(Image(BytesIO(chart_bytes), width=300, height=200))
-        else:
-            for p, c in port_counts.items():
-                elements.append(Paragraph(f"{p}: {c}", styles["Normal"]))
-        elements.append(Spacer(1, 12))
-
-    # Top flows table
     flows_df = top_flows_df
     if flows_df is None:
         records = metrics_json.get("top_talkers_by_bytes") or []
         if records:
             flows_df = pd.DataFrame(records)
-    if flows_df is not None and not flows_df.empty:
-        elements.append(Paragraph("Top Flows", styles["Heading2"]))
-        display_cols = list(flows_df.columns)
-        table_df = flows_df.head(20).fillna("")
-        data = [display_cols] + table_df.values.tolist()
-        table = Table(data, repeatRows=1)
-        table.setStyle(
-            TableStyle(
-                [
-                    ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ]
-            )
-        )
-        elements.append(table)
-        elements.append(Spacer(1, 12))
 
-    # Performance metrics
-    perf = metrics_json.get("performance_metrics", {})
-    if perf:
-        elements.append(Paragraph("Performance Metrics", styles["Heading2"]))
-        for k, v in perf.items():
-            elements.append(Paragraph(f"{k}: {v}", styles["Normal"]))
-        elements.append(Spacer(1, 12))
+    try:
+        elements = _build_elements(metrics_json, flows_df, styles)
+        doc.build(elements)
+    except Exception as exc:
+        raise ReportGenerationError(str(exc)) from exc
 
-    # Error summary
-    errors = metrics_json.get("error_summary", {})
-    if errors:
-        elements.append(Paragraph("Error Summary", styles["Heading2"]))
-        for k, v in errors.items():
-            elements.append(Paragraph(f"{k}: {v}", styles["Normal"]))
-        elements.append(Spacer(1, 12))
-
-    # Security findings
-    sec = metrics_json.get("security_findings", {})
-    if sec:
-        elements.append(Paragraph("Security Findings", styles["Heading2"]))
-        for k, v in sec.items():
-            elements.append(Paragraph(f"{k}: {v}", styles["Normal"]))
-        elements.append(Spacer(1, 12))
-
-    # Timeline spikes
-    timeline = metrics_json.get("timeline_data", [])
-    spikes = [t for t in timeline if t.get("spike")]
-    if spikes:
-        elements.append(Paragraph("Timeline Spikes", styles["Heading2"]))
-        for spike in spikes:
-            ts = spike.get("timestamp")
-            bytes_ = spike.get("bytes")
-            elements.append(
-                Paragraph(f"Spike at {ts}: {bytes_} bytes", styles["Normal"])
-            )
-        elements.append(Spacer(1, 12))
-
-    doc.build(elements)
     pdf_bytes = buffer.getvalue()
     buffer.close()
     return pdf_bytes
