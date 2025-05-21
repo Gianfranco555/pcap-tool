@@ -1016,12 +1016,47 @@ def _parse_with_pyshark(
 
 def _parse_with_pcapkit(file_path: str, max_packets: Optional[int]) -> Generator[PcapRecord, None, None]:
     logger.info(f"Attempting to parse with PCAPKit (fallback): {file_path}")
-    logger.warning("PCAPKit fallback: Most new fields are not implemented in this PcapKit path.")
-    logger.info("PCAPKit: Extraction stub -- no packets will be returned.")
-    if False:
-        yield  # This makes it a generator
-    logger.info("PCAPKit: Processing complete (stubbed).")
-    return # Or raise StopIteration implicitly
+    logger.warning(
+        "PCAPKit fallback: Most new fields are not implemented in this PcapKit path."
+    )
+
+    packet_count = 0
+    generated_records = 0
+    extractor = None
+
+    try:
+        extractor = pcapkit_extract(fin=file_path, store=False, auto=False)
+        for frame in extractor:
+            packet_count += 1
+            timestamp = getattr(frame.info, "time_epoch", 0.0)
+            length = getattr(frame.info, "cap_len", None)
+
+            yield PcapRecord(
+                frame_number=packet_count,
+                timestamp=timestamp,
+                packet_length=length,
+            )
+
+            generated_records += 1
+            if max_packets is not None and generated_records >= max_packets:
+                logger.info(
+                    f"PCAPKit: Reached max_packets limit of {max_packets}."
+                )
+                break
+    except Exception as e_capkit:
+        logger.error(
+            f"An error occurred during PCAPKit packet iteration in {file_path}: {e_capkit}",
+            exc_info=True,
+        )
+    finally:
+        if extractor is not None and not getattr(extractor, "_flag_e", False):
+            try:
+                extractor._cleanup()  # type: ignore[attr-defined]
+            except Exception:
+                pass
+        logger.info(
+            f"PCAPKit: Finished processing. Scanned {packet_count} packets, yielded {generated_records} records."
+        )
 
 
 def _ensure_path(file_like: Path | IO[bytes]) -> tuple[Path, bool]:
