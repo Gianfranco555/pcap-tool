@@ -14,45 +14,6 @@ from .chart_generator import protocol_pie_chart, top_ports_bar_chart
 from .exceptions import ReportGenerationError
 
 
-def _select_top_flows(flows_df: pd.DataFrame, count: int = 20) -> pd.DataFrame:
-    """Return flows ordered by diagnostic relevance."""
-
-    if flows_df is None or flows_df.empty:
-        return flows_df
-
-    def _score(row: pd.Series) -> float:
-        score = 0.0
-        disposition = str(row.get("flow_disposition", ""))
-        if disposition.startswith("Blocked"):
-            score += 1000
-        elif "Degraded" in disposition:
-            score += 500
-
-        obs = row.get("security_observations")
-        if obs is None:
-            obs = row.get("security_observation")
-        if isinstance(obs, str):
-            if obs and obs != "None":
-                score += 200 * len([o for o in re.split(r"[;,]+", obs) if o.strip()])
-        elif obs not in (None, ""):
-            try:
-                score += 200 * len(obs)
-            except Exception:
-                score += 200
-
-        bytes_total = row.get("bytes_total")
-        try:
-            score += float(bytes_total) / 1_000_000
-        except Exception:
-            pass
-        return score
-
-    df = flows_df.copy()
-    df["__score"] = df.apply(_score, axis=1)
-    df = df.sort_values("__score", ascending=False).drop(columns=["__score"])
-    return df.head(count)
-
-
 def _sparkline_chart(values: list[int]) -> bytes:
     """Return a tiny bar chart PNG for sparkline values."""
     if not values:
@@ -146,7 +107,8 @@ def _build_elements(
         elements.append(Spacer(1, 12))
 
     if flows_df is not None and not flows_df.empty:
-        flows_df = _select_top_flows(flows_df)
+        from .metrics_builder import select_top_flows
+        flows_df = select_top_flows(flows_df)
         elements.append(Paragraph("Top Flows", styles["Heading2"]))
 
         preferred_cols = [
@@ -309,7 +271,11 @@ def generate_pdf_report(
 
     flows_df = top_flows_df
     if flows_df is None:
-        records = metrics_json.get("top_talkers_by_bytes") or []
+        records = (
+            metrics_json.get("top_flows")
+            or metrics_json.get("top_talkers_by_bytes")
+            or []
+        )
         if records:
             flows_df = pd.DataFrame(records)
 

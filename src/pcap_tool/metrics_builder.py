@@ -5,6 +5,8 @@ from __future__ import annotations
 from pcap_tool.logging import get_logger
 from typing import Any, Dict, List
 
+import re
+
 import pandas as pd
 
 from .metrics.flow_table import FlowTable
@@ -20,6 +22,79 @@ logger = get_logger(__name__)
 # Country codes considered "common" in most enterprise traffic. Connections to
 # destinations outside this set are flagged as unusual.
 DEFAULT_COMMON_COUNTRIES = {"US", "CA", "GB", "DE", "FR", "NL", "JP", "AU"}
+
+# Scoring constants used in select_top_flows
+SCORE_BLOCKED_DISPOSITION = 1000
+SCORE_DEGRADED_DISPOSITION = 500
+SECURITY_OBS_MULTIPLIER = 200
+SECURITY_OBS_FALLBACK = 200
+BYTES_TOTAL_DIVISOR = 1_000_000
+
+
+def select_top_flows(flows_df: pd.DataFrame, count: int = 20) -> pd.DataFrame:
+    """Return flows ordered by diagnostic relevance."""
+
+    if flows_df is None or flows_df.empty:
+        return flows_df
+
+    def _score(row: pd.Series) -> float:
+        score = 0.0
+
+        disposition = str(row.get("flow_disposition", ""))
+        if disposition.startswith("Blocked"):
+            score += SCORE_BLOCKED_DISPOSITION
+        elif "Degraded" in disposition:
+            score += SCORE_DEGRADED_DISPOSITION
+
+        obs = row.get("security_observations")
+        if obs is None:
+            obs = row.get("security_observation")
+
+        # ``obs`` may be None, an empty string, the literal string "None",
+        # or a sequence of observations. Only non-empty values contribute to the score.
+        if isinstance(obs, str):
+            cleaned = obs.strip()
+            if cleaned and cleaned.lower() != "none":
+                tokens = [o for o in re.split(r"[;,]+", cleaned) if o.strip()]
+                score += SECURITY_OBS_MULTIPLIER * len(tokens)
+        elif obs not in (None, ""):
+            try:
+                score += SECURITY_OBS_MULTIPLIER * len(obs)
+            except TypeError:
+                logger.warning(
+                    "Could not determine length of security observations: %r, type: %s",
+                    obs,
+                    type(obs),
+                )
+                score += SECURITY_OBS_FALLBACK
+            except Exception as exc:
+                logger.error(
+                    "Unexpected error processing security observations: %s",
+                    exc,
+                )
+                score += SECURITY_OBS_FALLBACK
+
+        bytes_total = row.get("bytes_total")
+        try:
+            score += float(bytes_total) / BYTES_TOTAL_DIVISOR
+        except (ValueError, TypeError):
+            logger.warning(
+                'Could not convert bytes_total "%s" to float. Skipping its contribution to score.',
+                bytes_total,
+            )
+        except Exception as exc:
+            logger.error(
+                'Unexpected error processing bytes_total "%s": %s. Skipping its contribution to score.',
+                bytes_total,
+                exc,
+            )
+
+        return score
+
+    df = flows_df.copy()
+    df["__score"] = df.apply(_score, axis=1)
+    df = df.sort_values("__score", ascending=False).drop(columns=["__score"])
+    return df.head(count)
 
 
 class MetricsBuilder:
@@ -158,6 +233,13 @@ class MetricsBuilder:
             bytes_val = row.get("bytes_total")
             entry["bytes"] += int(bytes_val) if pd.notna(bytes_val) else 0
         metrics["service_overview"] = service_overview
+
+        # Top flows based on diagnostic relevance
+        metrics["top_flows"] = (
+            select_top_flows(tagged_flow_df).to_dict(orient="records")
+            if not tagged_flow_df.empty
+            else []
+        )
 
         # Error summary
         metrics["error_summary"] = self.error_summarizer.summarize_errors(tagged_flow_df)
