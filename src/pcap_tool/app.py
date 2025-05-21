@@ -12,6 +12,7 @@ import tempfile
 from pathlib import Path
 
 from pcap_tool.metrics.retransmission import categorize_retransmission_severity
+from pcap_tool.utils import render_status_pill
 
 import pandas as pd
 import streamlit as st
@@ -161,6 +162,36 @@ if metrics_output is not None:
         else:
             st.info("No TLS traffic detected")
 
+        err_summary = metrics_output.get("error_summary", {})
+        err_count = 0
+        for info in err_summary.values():
+            if isinstance(info, dict) and "count" in info:
+                err_count += int(info.get("count", 0))
+            elif isinstance(info, dict):
+                for detail in info.values():
+                    err_count += int(detail.get("count", 0))
+
+        sec_findings = metrics_output.get("security_findings", {})
+        sec_count = 0
+        sec_count += int(sec_findings.get("plaintext_http_flows") or 0)
+        sec_count += int(sec_findings.get("self_signed_certificate_flows") or 0)
+        outdated = sec_findings.get("outdated_tls_version_counts") or {}
+        if isinstance(outdated, dict):
+            sec_count += sum(int(v) for v in outdated.values())
+        unusual = sec_findings.get("connections_to_unusual_countries") or {}
+        if isinstance(unusual, dict):
+            sec_count += len(unusual)
+
+        st.subheader("Errors & Security Overview")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown(render_status_pill("errors", err_count, True), unsafe_allow_html=True)
+        with col_b:
+            st.markdown(
+                render_status_pill("security issues", sec_count, True),
+                unsafe_allow_html=True,
+            )
+
     with flows_tab:
         flows_df = tagged_flow_df
         options = flows_df["l7_protocol_guess"].dropna().unique().tolist()
@@ -195,7 +226,28 @@ if metrics_output is not None:
 
     with errors_tab:
         st.subheader("Error Summary")
-        st.json(metrics_output.get("error_summary", {}))
+        summary = metrics_output.get("error_summary", {})
+        error_rows = []
+        for err_type, info in summary.items():
+            if isinstance(info, dict) and "count" in info:
+                error_rows.append({
+                    "Type": err_type,
+                    "Description": "",
+                    "Count": info.get("count", 0),
+                })
+            elif isinstance(info, dict):
+                for detail, d in info.items():
+                    error_rows.append({
+                        "Type": err_type,
+                        "Description": detail,
+                        "Count": d.get("count", 0),
+                    })
+
+        if not error_rows:
+            st.markdown("No errors detected")
+        else:
+            st.dataframe(pd.DataFrame(error_rows), use_container_width=True)
+
         err_df = pd.DataFrame()
         required_cols = {
             "packet_error_reason",
@@ -215,9 +267,38 @@ if metrics_output is not None:
                 .reset_index()
             )
         st.subheader("Network Errors")
-        st.dataframe(err_df, use_container_width=True)
+        if err_df.empty:
+            st.markdown("No packet errors detected")
+        else:
+            st.dataframe(err_df, use_container_width=True)
+
         st.subheader("Security Findings")
-        st.json(metrics_output.get("security_findings", {}))
+        sec = metrics_output.get("security_findings", {})
+        keys = [
+            "plaintext_http_flows",
+            "outdated_tls_version_counts",
+            "self_signed_certificate_flows",
+            "connections_to_unusual_countries",
+        ]
+        cols = st.columns(len(keys))
+        for col, key in zip(cols, keys):
+            val = sec.get(key, {})
+            if isinstance(val, dict):
+                if all(isinstance(v, int) for v in val.values()):
+                    count = sum(int(v) for v in val.values())
+                else:
+                    count = len(val)
+            else:
+                count = int(val or 0)
+            label = key.replace("_", " ").title()
+            col.markdown(
+                render_status_pill(label, count, True),
+                unsafe_allow_html=True,
+            )
+
+        if st.session_state.get("debug_mode", False):
+            with st.expander("Raw Security Data (Debug)"):
+                st.json(sec)
 
     with timeline_tab:
         timeline = metrics_output.get("timeline_data", [])
