@@ -284,6 +284,16 @@ def udp_443_non_quic_pcap(tmp_path):
     return create_pcap_file([pkt], tmp_path, "udp443_not_quic.pcap")
 
 
+@pytest.fixture
+def pcapkit_l2_l3_test_pcap(tmp_path):
+    pkt = (
+        Ether(src="00:11:22:33:44:55", dst="AA:BB:CC:DD:EE:FF")
+        / IP(src="10.0.0.1", dst="10.0.0.2", ttl=60)
+        / TCP(sport=12345, dport=80)
+    )
+    return create_pcap_file([pkt], tmp_path, "pcapkit_l2_l3.pcap")
+
+
 def test_tcp_flag_parsing(tcp_flags_pcap):
     df = parse_pcap(str(tcp_flags_pcap)).as_dataframe()
     assert len(df) == 4
@@ -384,6 +394,19 @@ def test_udp_443_not_quic(udp_443_non_quic_pcap):
     assert rec["protocol"] == "UDP"
     assert rec["destination_port"] == 443
     assert rec["is_quic"] == False
+
+
+def test_pcapkit_l2_l3_fields(pcapkit_l2_l3_test_pcap):
+    df = parse_pcap(str(pcapkit_l2_l3_test_pcap)).as_dataframe()
+    assert not df.empty and len(df) == 1
+    rec = df.iloc[0]
+    assert str(rec["source_mac"]).upper() == "00:11:22:33:44:55".upper()
+    assert str(rec["destination_mac"]).upper() == "AA:BB:CC:DD:EE:FF".upper()
+    assert rec["source_ip"] == "10.0.0.1"
+    assert rec["destination_ip"] == "10.0.0.2"
+    assert rec["ip_ttl"] == 60
+    assert rec["protocol_l3"] in ["IPv4", "IP"]
+    assert rec["protocol"] == "TCP"
 
 
 def test_safe_int_parses_commas():
