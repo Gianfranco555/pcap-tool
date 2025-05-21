@@ -145,8 +145,8 @@ def build_metrics(df: pd.DataFrame, heuristics_rules: Path) -> pd.DataFrame:
     return engine.tag_flows(df)
 
 
-def generate_reports(metrics: dict, flows_df: pd.DataFrame) -> bytes:
+def generate_reports(metrics: dict, flows_df: pd.DataFrame, summary_text: str | None = None) -> bytes:
     """Return PDF bytes for the provided metrics."""
     from .pdf_report import generate_pdf_report
 
-    return generate_pdf_report(metrics, flows_df)
+    return generate_pdf_report(metrics, flows_df, summary_text)

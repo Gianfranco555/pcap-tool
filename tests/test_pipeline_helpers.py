@@ -45,7 +45,7 @@ def test_build_metrics(tmp_path: Path):
 
 def test_generate_reports(monkeypatch):
     monkeypatch.setattr(
-        "pcap_tool.pdf_report.generate_pdf_report", lambda metrics, df: b"pdf"
+        "pcap_tool.pdf_report.generate_pdf_report", lambda metrics, df, summary=None: b"pdf"
     )
-    pdf = generate_reports({}, pd.DataFrame())
+    pdf = generate_reports({}, pd.DataFrame(), "text")
     assert pdf == b"pdf"

@@ -89,7 +89,7 @@ def run_analysis(
 
     llm_summarizer = LLMSummarizer()
     text_summary = llm_summarizer.generate_text_summary(metrics_json)
-    pdf_bytes = generate_reports(metrics_json, tagged_flow_df)
+    pdf_bytes = generate_reports(metrics_json, tagged_flow_df, text_summary)
 
     return metrics_json, tagged_flow_df, text_summary, pdf_bytes
 
