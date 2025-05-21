@@ -1,6 +1,7 @@
 import pytest
 
-from pcap_tool.pdf_report import generate_pdf_report, _build_elements, _select_top_flows
+from pcap_tool.pdf_report import generate_pdf_report, _build_elements
+from pcap_tool.metrics_builder import select_top_flows
 from pcap_tool.exceptions import ReportGenerationError
 
 
@@ -80,6 +81,21 @@ def test_select_top_flows_scoring():
         ]
     )
 
-    result = _select_top_flows(df, count=3)
+    result = select_top_flows(df, count=3)
     assert result.iloc[0]["flow_disposition"].startswith("Blocked")
     assert result.iloc[1]["flow_disposition"] == "Degraded"
+
+
+def test_generate_pdf_report_with_top_flows_key():
+    metrics = {
+        "capture_info": {"filename": "test.pcap"},
+        "top_flows": [
+            {"flow_disposition": "Blocked - Test", "bytes_total": 10},
+            {"flow_disposition": "Allowed", "bytes_total": 1000},
+        ],
+    }
+    try:
+        pdf_bytes = generate_pdf_report(metrics)
+    except ImportError:
+        pytest.skip("ReportLab not installed")
+    assert isinstance(pdf_bytes, (bytes, bytearray))
