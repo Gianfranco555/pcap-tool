@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pcap_tool.logging import get_logger
 from typing import Any, Dict, List, TYPE_CHECKING
+from collections.abc import Iterable
 
 import re
 
@@ -25,6 +26,12 @@ logger = get_logger(__name__)
 # destinations outside this set are flagged as unusual.
 DEFAULT_COMMON_COUNTRIES = {"US", "CA", "GB", "DE", "FR", "NL", "JP", "AU"}
 
+# Scoring constants used by ``select_top_flows``
+SCORE_BLOCKED = 1000
+SCORE_DEGRADED = 500
+SCORE_PER_SECURITY_OBSERVATION = 200
+BYTES_SCORE_DIVISOR = 1_000_000
+
 
 def select_top_flows(flows_df: pd.DataFrame, count: int = 20) -> pd.DataFrame:
     """Return flows ordered by diagnostic relevance."""
@@ -36,25 +43,38 @@ def select_top_flows(flows_df: pd.DataFrame, count: int = 20) -> pd.DataFrame:
         score = 0.0
         disposition = str(row.get("flow_disposition", ""))
         if disposition.startswith("Blocked"):
-            score += 1000
+            score += SCORE_BLOCKED
         elif "Degraded" in disposition:
-            score += 500
+            score += SCORE_DEGRADED
 
         obs = row.get("security_observations", row.get("security_observation"))
         if isinstance(obs, str):
             cleaned = obs.strip()
             # Check for formally defined 'none' string representing no observation
             if cleaned and cleaned.lower() != "none":
-                score += 200 * len([o for o in re.split(r"[;,]+", cleaned) if o.strip()])
-        elif obs not in (None, ""):
-            try:
-                score += 200 * len(obs)
-            except Exception:
-                score += 200
+                score += SCORE_PER_SECURITY_OBSERVATION * len(
+                    [o for o in re.split(r"[;,]+", cleaned) if o.strip()]
+                )
+        else:
+            if (
+                isinstance(obs, Iterable)
+                and not isinstance(obs, (str, bytes))
+                and hasattr(obs, "__len__")
+            ):
+                try:
+                    obs_len = len(obs)
+                except Exception as exc:  # pragma: no cover - unexpected error
+                    logger.error(
+                        "Unexpected error determining length of security observations: %s",
+                        exc,
+                    )
+                else:
+                    if obs_len > 0:
+                        score += SCORE_PER_SECURITY_OBSERVATION * obs_len
 
         bytes_total = row.get("bytes_total")
         try:
-            score += float(bytes_total) / 1_000_000
+            score += float(bytes_total) / BYTES_SCORE_DIVISOR
         except Exception:
             pass
         return score
