@@ -84,9 +84,21 @@ create_pcap_file = create_pcap_file_with_desktop_copy
 def happy_path_pcap(tmp_path):
     # Ensure IP flags are correctly set if parser expects them (e.g. DF = 0x02)
     # Scapy's flags field can take a string like "DF" or an integer.
-    pkt1 = Ether()/IP(src="192.168.1.100", dst="192.168.1.1", flags="DF")/TCP(sport=12345, dport=80, flags="S")
-    pkt2 = Ether()/IP(src="192.168.1.1",   dst="192.168.1.100", flags="DF")/TCP(sport=80,    dport=12345, flags="SA")
-    pkt3 = Ether()/IP(src="192.168.1.100", dst="192.168.1.1", flags="DF")/TCP(sport=12345, dport=80,    flags="A")
+    pkt1 = (
+        Ether(src="00:11:22:33:44:01", dst="00:11:22:33:44:02")
+        / IP(src="192.168.1.100", dst="192.168.1.1", flags="DF", ttl=64)
+        / TCP(sport=12345, dport=80, flags="S")
+    )
+    pkt2 = (
+        Ether(src="00:11:22:33:44:02", dst="00:11:22:33:44:01")
+        / IP(src="192.168.1.1", dst="192.168.1.100", flags="DF", ttl=64)
+        / TCP(sport=80, dport=12345, flags="SA")
+    )
+    pkt3 = (
+        Ether(src="00:11:22:33:44:01", dst="00:11:22:33:44:02")
+        / IP(src="192.168.1.100", dst="192.168.1.1", flags="DF", ttl=64)
+        / TCP(sport=12345, dport=80, flags="A")
+    )
 
     if ScapyServerNameClass is None or TLSExtensionServerNameClass is None:
         raise ImportError("ScapyServerNameClass or TLSExtensionServerNameClass could not be defined/imported.")
@@ -99,11 +111,23 @@ def happy_path_pcap(tmp_path):
     tls_record_obj = TLS(type=22, version=0x0303, len=len(client_hello_bytes)) / Raw(load=client_hello_bytes)
 
 
-    pkt4 = (Ether() / IP(src="192.168.1.100", dst="192.168.1.200", flags="DF") / # Added DF
-            TCP(sport=54321, dport=443, flags="PA") / tls_record_obj)
-    pkt5 = (Ether() / IP(src="192.168.1.101", dst="192.168.1.102", flags="DF") / # Added DF
-            UDP(sport=10000, dport=53) / Raw(load=b"DNSQuery"))
-    pkt6 = (Ether() / IP(src="192.168.1.103", dst="192.168.1.104", flags="DF") / ICMP(type="echo-request")) # Added DF
+    pkt4 = (
+        Ether(src="00:11:22:33:44:01", dst="00:11:22:33:44:03")
+        / IP(src="192.168.1.100", dst="192.168.1.200", flags="DF", ttl=64)
+        / TCP(sport=54321, dport=443, flags="PA")
+        / tls_record_obj
+    )
+    pkt5 = (
+        Ether(src="00:11:22:33:44:04", dst="00:11:22:33:44:05")
+        / IP(src="192.168.1.101", dst="192.168.1.102", flags="DF", ttl=64)
+        / UDP(sport=10000, dport=53)
+        / Raw(load=b"DNSQuery")
+    )
+    pkt6 = (
+        Ether(src="00:11:22:33:44:06", dst="00:11:22:33:44:07")
+        / IP(src="192.168.1.103", dst="192.168.1.104", flags="DF", ttl=64)
+        / ICMP(type="echo-request")
+    )
     packets = [pkt1, pkt2, pkt3, pkt4, pkt5, pkt6]
     base_time = 1678886400.0
     for i, pkt_val in enumerate(packets):
@@ -164,6 +188,10 @@ def test_happy_path_parsing(happy_path_pcap):
     assert syn["frame_number"] == 1
     assert syn["source_ip"] == "192.168.1.100"
     assert syn["destination_ip"] == "192.168.1.1"
+    assert syn["source_mac"] == "00:11:22:33:44:01"
+    assert syn["destination_mac"] == "00:11:22:33:44:02"
+    assert syn["protocol_l3"] in ["IPv4", "IP"]
+    assert syn["ip_ttl"] == 64
     assert syn["protocol"] == "TCP"
     # CHANGE: Use '== True' for value comparison
     assert syn["tcp_flags_syn"] == True, f"tcp_flags_syn: Expected True, got {syn['tcp_flags_syn']}"
@@ -177,6 +205,10 @@ def test_happy_path_parsing(happy_path_pcap):
     assert tls_rec["protocol"] == "TCP"
     assert tls_rec["destination_port"] == 443
     assert tls_rec["sni"] == "test.example.com", f"SNI: Expected test.example.com, got {tls_rec['sni']}"
+    assert tls_rec["source_mac"] == "00:11:22:33:44:01"
+    assert tls_rec["destination_mac"] == "00:11:22:33:44:03"
+    assert tls_rec["protocol_l3"] in ["IPv4", "IP"]
+    assert tls_rec["ip_ttl"] == 64
     # Assuming pkt4 also has DF flag set in its IP layer
     assert tls_rec["ip_flags_df"] == True, f"tls_rec ip_flags_df: Expected True, got {tls_rec['ip_flags_df']}"
     assert_new_fields_logic(tls_rec, is_tcp_packet=True)
@@ -184,12 +216,20 @@ def test_happy_path_parsing(happy_path_pcap):
     udp_rec = df.iloc[4]
     assert udp_rec["frame_number"] == 5
     assert udp_rec["protocol"] == "UDP"
+    assert udp_rec["source_mac"] == "00:11:22:33:44:04"
+    assert udp_rec["destination_mac"] == "00:11:22:33:44:05"
+    assert udp_rec["protocol_l3"] in ["IPv4", "IP"]
+    assert udp_rec["ip_ttl"] == 64
     assert udp_rec["ip_flags_df"] == True, f"udp_rec ip_flags_df: Expected True, got {udp_rec['ip_flags_df']}"
     assert_new_fields_logic(udp_rec)
 
     icmp_rec = df.iloc[5]
     assert icmp_rec["frame_number"] == 6
     assert str(icmp_rec["protocol"]).upper() == "ICMP"
+    assert icmp_rec["source_mac"] == "00:11:22:33:44:06"
+    assert icmp_rec["destination_mac"] == "00:11:22:33:44:07"
+    assert icmp_rec["protocol_l3"] in ["IPv4", "IP"]
+    assert icmp_rec["ip_ttl"] == 64
     assert icmp_rec["ip_flags_df"] == True, f"icmp_rec ip_flags_df: Expected True, got {icmp_rec['ip_flags_df']}"
     assert_new_fields_logic(icmp_rec)
 
