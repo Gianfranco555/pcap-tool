@@ -22,7 +22,7 @@ load_layer("tls")
 
 from scapy.packet import Packet
 from scapy.fields import ByteEnumField, FieldLenField, StrLenField
-from scapy.layers.l2 import Ether
+from scapy.layers.l2 import Ether, ARP
 from scapy.layers.inet import IP, TCP, UDP, ICMP
 from scapy.layers.dns import DNS, DNSQR, DNSRR
 from scapy.layers.tls.record import TLS
@@ -294,6 +294,21 @@ def pcapkit_l2_l3_test_pcap(tmp_path):
     return create_pcap_file([pkt], tmp_path, "pcapkit_l2_l3.pcap")
 
 
+@pytest.fixture
+def pcapkit_arp_test_pcap(tmp_path):
+    arp_pkt = (
+        Ether(dst="ff:ff:ff:ff:ff:ff", src="00:01:02:03:04:05")
+        / ARP(
+            pdst="192.168.1.1",
+            psrc="192.168.1.100",
+            hwsrc="00:01:02:03:04:05",
+            hwdst="00:00:00:00:00:00",
+            op=1,
+        )
+    )
+    return create_pcap_file([arp_pkt], tmp_path, "pcapkit_arp.pcap")
+
+
 def test_tcp_flag_parsing(tcp_flags_pcap):
     df = parse_pcap(str(tcp_flags_pcap)).as_dataframe()
     assert len(df) == 4
@@ -407,6 +422,18 @@ def test_pcapkit_l2_l3_fields(pcapkit_l2_l3_test_pcap):
     assert rec["ip_ttl"] == 60
     assert rec["protocol_l3"] in ["IPv4", "IP"]
     assert rec["protocol"] == "TCP"
+
+
+def test_pcapkit_arp_fields(pcapkit_arp_test_pcap):
+    df = parse_pcap(str(pcapkit_arp_test_pcap)).as_dataframe()
+    assert not df.empty and len(df) == 1
+    rec = df.iloc[0]
+    assert rec["protocol_l3"] == "ARP"
+    assert rec["arp_opcode"] == 1
+    assert rec["arp_sender_mac"] == "00:01:02:03:04:05"
+    assert rec["arp_sender_ip"] == "192.168.1.100"
+    assert rec["arp_target_mac"] == "00:00:00:00:00:00"
+    assert rec["arp_target_ip"] == "192.168.1.1"
 
 
 def test_safe_int_parses_commas():
