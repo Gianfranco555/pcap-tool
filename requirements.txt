@@ -37,6 +37,7 @@ plotly
 
 # Charting
 plotly
+matplotlib
 
 # Utilities
 python-dotenv                   # For loading .env files (as per README)

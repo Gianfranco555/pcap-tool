@@ -5,10 +5,32 @@ from __future__ import annotations
 from io import BytesIO
 from typing import Any, Dict, Optional
 
+import re
+from statistics import mean
+
 import pandas as pd
 
 from .chart_generator import protocol_pie_chart, top_ports_bar_chart
 from .exceptions import ReportGenerationError
+
+
+def _sparkline_chart(values: list[int]) -> bytes:
+    """Return a tiny bar chart PNG for sparkline values."""
+    if not values:
+        return b""
+    try:  # pragma: no cover - optional dependency
+        import matplotlib.pyplot as plt
+    except Exception:  # pragma: no cover - matplotlib may not be installed
+        return b""
+
+    fig, ax = plt.subplots(figsize=(1.4, 0.25), dpi=100)
+    ax.bar(range(len(values)), values, color="#4B8BBE")
+    ax.axis("off")
+    fig.patch.set_alpha(0.0)
+    buf = BytesIO()
+    fig.savefig(buf, format="png", bbox_inches="tight", pad_inches=0, transparent=True)
+    plt.close(fig)
+    return buf.getvalue()
 
 
 def _build_elements(metrics_json: Dict[str, Any], flows_df: Optional[pd.DataFrame], styles) -> list:
@@ -90,6 +112,7 @@ def _build_elements(metrics_json: Dict[str, Any], flows_df: Optional[pd.DataFram
             display_cols = list(flows_df.columns[:8])
 
         table_df = flows_df[display_cols].head(20).fillna("")
+        spark_re = re.compile(r"sparkline_.*")
 
         header_map = {
             "src_ip": "Source IP",
@@ -102,7 +125,33 @@ def _build_elements(metrics_json: Dict[str, Any], flows_df: Optional[pd.DataFram
         }
         headers = [header_map.get(c, c) for c in display_cols]
 
-        data = [headers] + table_df.astype(str).values.tolist()
+        data = [headers]
+        for _, row in table_df.iterrows():
+            row_vals = []
+            for col in display_cols:
+                val = row[col]
+                if spark_re.match(col):
+                    if isinstance(val, str):
+                        parts = [p for p in val.split(',') if p]
+                        numbers = [int(p) for p in parts if p.isdigit()]
+                    else:
+                        try:
+                            numbers = [int(v) for v in val]
+                        except Exception:
+                            numbers = []
+                    img_bytes = _sparkline_chart(numbers)
+                    if img_bytes:
+                        row_vals.append(Image(BytesIO(img_bytes), width=100, height=16))
+                    else:
+                        if numbers:
+                            row_vals.append(
+                                f"Trend: {min(numbers)} -> {max(numbers)}, Avg: {mean(numbers):.1f}"
+                            )
+                        else:
+                            row_vals.append("")
+                else:
+                    row_vals.append(str(val))
+            data.append(row_vals)
         table = Table(data, repeatRows=1, hAlign="LEFT")
         style_cmds = [
             ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
@@ -112,7 +161,9 @@ def _build_elements(metrics_json: Dict[str, Any], flows_df: Optional[pd.DataFram
         ]
 
         numeric_idx = [
-            i for i, c in enumerate(display_cols) if pd.api.types.is_numeric_dtype(table_df[c])
+            i
+            for i, c in enumerate(display_cols)
+            if pd.api.types.is_numeric_dtype(table_df[c]) and not spark_re.match(c)
         ]
         for idx in numeric_idx:
             style_cmds.append(("ALIGN", (idx, 1), (idx, -1), "RIGHT"))
