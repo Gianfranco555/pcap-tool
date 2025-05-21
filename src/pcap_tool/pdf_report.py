@@ -74,19 +74,50 @@ def _build_elements(metrics_json: Dict[str, Any], flows_df: Optional[pd.DataFram
 
     if flows_df is not None and not flows_df.empty:
         elements.append(Paragraph("Top Flows", styles["Heading2"]))
-        display_cols = list(flows_df.columns)
-        table_df = flows_df.head(20).fillna("")
-        data = [display_cols] + table_df.values.tolist()
-        table = Table(data, repeatRows=1)
-        table.setStyle(
-            TableStyle(
-                [
-                    ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
-                    ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
-                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ]
-            )
-        )
+
+        preferred_cols = [
+            "src_ip",
+            "dest_ip",
+            "src_port",
+            "dest_port",
+            "protocol",
+            "l7_protocol_guess",
+            "bytes_total",
+            "pkts_total",
+        ]
+        display_cols = [c for c in preferred_cols if c in flows_df.columns]
+        if not display_cols:
+            display_cols = list(flows_df.columns[:8])
+
+        table_df = flows_df[display_cols].head(20).fillna("")
+
+        header_map = {
+            "src_ip": "Source IP",
+            "dest_ip": "Destination IP",
+            "src_port": "Src Port",
+            "dest_port": "Dst Port",
+            "l7_protocol_guess": "L7 Proto",
+            "bytes_total": "Bytes",
+            "pkts_total": "Packets",
+        }
+        headers = [header_map.get(c, c) for c in display_cols]
+
+        data = [headers] + table_df.astype(str).values.tolist()
+        table = Table(data, repeatRows=1, hAlign="LEFT")
+        style_cmds = [
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+        ]
+
+        numeric_idx = [
+            i for i, c in enumerate(display_cols) if pd.api.types.is_numeric_dtype(table_df[c])
+        ]
+        for idx in numeric_idx:
+            style_cmds.append(("ALIGN", (idx, 1), (idx, -1), "RIGHT"))
+
+        table.setStyle(TableStyle(style_cmds))
         elements.append(table)
         elements.append(Spacer(1, 12))
 
