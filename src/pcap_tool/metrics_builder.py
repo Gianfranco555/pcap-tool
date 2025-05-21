@@ -5,6 +5,8 @@ from __future__ import annotations
 from pcap_tool.logging import get_logger
 from typing import Any, Dict, List
 
+import re
+
 import pandas as pd
 
 from .metrics.flow_table import FlowTable
@@ -20,6 +22,45 @@ logger = get_logger(__name__)
 # Country codes considered "common" in most enterprise traffic. Connections to
 # destinations outside this set are flagged as unusual.
 DEFAULT_COMMON_COUNTRIES = {"US", "CA", "GB", "DE", "FR", "NL", "JP", "AU"}
+
+
+def select_top_flows(flows_df: pd.DataFrame, count: int = 20) -> pd.DataFrame:
+    """Return flows ordered by diagnostic relevance."""
+
+    if flows_df is None or flows_df.empty:
+        return flows_df
+
+    def _score(row: pd.Series) -> float:
+        score = 0.0
+        disposition = str(row.get("flow_disposition", ""))
+        if disposition.startswith("Blocked"):
+            score += 1000
+        elif "Degraded" in disposition:
+            score += 500
+
+        obs = row.get("security_observations")
+        if obs is None:
+            obs = row.get("security_observation")
+        if isinstance(obs, str):
+            if obs and obs != "None":
+                score += 200 * len([o for o in re.split(r"[;,]+", obs) if o.strip()])
+        elif obs not in (None, ""):
+            try:
+                score += 200 * len(obs)
+            except Exception:
+                score += 200
+
+        bytes_total = row.get("bytes_total")
+        try:
+            score += float(bytes_total) / 1_000_000
+        except Exception:
+            pass
+        return score
+
+    df = flows_df.copy()
+    df["__score"] = df.apply(_score, axis=1)
+    df = df.sort_values("__score", ascending=False).drop(columns=["__score"])
+    return df.head(count)
 
 
 class MetricsBuilder:
@@ -158,6 +199,13 @@ class MetricsBuilder:
             bytes_val = row.get("bytes_total")
             entry["bytes"] += int(bytes_val) if pd.notna(bytes_val) else 0
         metrics["service_overview"] = service_overview
+
+        # Top flows based on diagnostic relevance
+        metrics["top_flows"] = (
+            select_top_flows(tagged_flow_df).to_dict(orient="records")
+            if not tagged_flow_df.empty
+            else []
+        )
 
         # Error summary
         metrics["error_summary"] = self.error_summarizer.summarize_errors(tagged_flow_df)

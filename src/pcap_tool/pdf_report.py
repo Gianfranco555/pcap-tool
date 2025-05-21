@@ -309,7 +309,11 @@ def generate_pdf_report(
 
     flows_df = top_flows_df
     if flows_df is None:
-        records = metrics_json.get("top_talkers_by_bytes") or []
+        records = (
+            metrics_json.get("top_flows")
+            or metrics_json.get("top_talkers_by_bytes")
+            or []
+        )
         if records:
             flows_df = pd.DataFrame(records)
 
