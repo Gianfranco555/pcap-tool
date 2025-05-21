@@ -45,6 +45,7 @@ except ImportError:
     logger.warning("PyShark library not found.")
 
 try:
+    import pcapkit
     from pcapkit import extract as pcapkit_extract
     # ... other pcapkit imports from original ...
     _USE_PCAPKIT = True
@@ -1025,17 +1026,72 @@ def _parse_with_pcapkit(file_path: str, max_packets: Optional[int]) -> Generator
     extractor = None
 
     try:
-        extractor = pcapkit_extract(fin=file_path, store=False, auto=False)
+        extract_kwargs = {"fin": file_path, "store": False, "engine": pcapkit.PCAPKit}
+        if "auto_protocol" in pcapkit_extract.__code__.co_varnames:
+            extract_kwargs["auto_protocol"] = True
+        else:
+            extract_kwargs["auto"] = True
+
+        extractor = pcapkit_extract(**extract_kwargs)
         for frame in extractor:
             packet_count += 1
-            timestamp = getattr(frame.info, "time_epoch", 0.0)
+
+            timestamp = float(getattr(frame.info, "time_epoch", 0.0))
             length = getattr(frame.info, "cap_len", None)
 
-            yield PcapRecord(
+            record = PcapRecord(
                 frame_number=packet_count,
                 timestamp=timestamp,
                 packet_length=length,
             )
+
+            eth = getattr(frame.info, "ethernet", None)
+            if eth is not None:
+                record.source_mac = getattr(eth, "src", None)
+                record.destination_mac = getattr(eth, "dst", None)
+
+                if hasattr(eth, "ipv4"):
+                    ipv4 = eth.ipv4
+                    record.protocol_l3 = "IPv4"
+                    record.source_ip = getattr(ipv4, "src", None)
+                    record.destination_ip = getattr(ipv4, "dst", None)
+                    ttl_val = getattr(ipv4, "ttl", None)
+                    if ttl_val is not None:
+                        record.ip_ttl = int(ttl_val.total_seconds()) if hasattr(ttl_val, "total_seconds") else int(ttl_val)
+                    proto = getattr(ipv4, "protocol", getattr(ipv4, "proto", None))
+                    if proto is not None:
+                        record.protocol = getattr(proto, "name", str(proto))
+
+                elif hasattr(eth, "ipv6"):
+                    ipv6 = eth.ipv6
+                    record.protocol_l3 = "IPv6"
+                    record.source_ip = getattr(ipv6, "src", None)
+                    record.destination_ip = getattr(ipv6, "dst", None)
+                    ttl_val = (
+                        getattr(ipv6, "limit", None)
+                        or getattr(ipv6, "hop_limit", None)
+                        or getattr(ipv6, "ttl", None)
+                    )
+                    if ttl_val is not None:
+                        record.ip_ttl = int(ttl_val.total_seconds()) if hasattr(ttl_val, "total_seconds") else int(ttl_val)
+                    proto = (
+                        getattr(ipv6, "next_header", None)
+                        or getattr(ipv6, "nxt", None)
+                        or getattr(ipv6, "protocol", None)
+                    )
+                    if proto is not None:
+                        record.protocol = getattr(proto, "name", str(proto))
+
+                elif hasattr(eth, "arp"):
+                    arp = eth.arp
+                    record.protocol_l3 = "ARP"
+                    record.arp_sender_mac = getattr(arp, "src_hw_mac", None)
+                    record.arp_sender_ip = getattr(arp, "src_proto_ipv4", None)
+                    record.arp_target_mac = getattr(arp, "dst_hw_mac", None)
+                    record.arp_target_ip = getattr(arp, "dst_proto_ipv4", None)
+                    record.arp_opcode = getattr(arp, "opcode", None)
+
+            yield record
 
             generated_records += 1
             if max_packets is not None and generated_records >= max_packets:
