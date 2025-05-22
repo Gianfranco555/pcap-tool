@@ -17,14 +17,11 @@ if _LegacyHeuristicEngine is not None:
 else:
     class HeuristicEngine:  # type: ignore
         def __init__(self, *args, **kwargs) -> None:
-            if _legacy_heuristic_engine_import_error is not None:
-                raise ImportError(
-                    "The optional legacy 'heuristics.engine.HeuristicEngine' dependency is not installed or failed to import. "
-                    "This engine might be required for certain functionalities. Please ensure the 'heuristics' package is correctly installed if needed."
-                ) from _legacy_heuristic_engine_import_error
+            """Placeholder used when the legacy dependency is missing."""
             raise ImportError(
-                "The optional legacy 'heuristics.engine.HeuristicEngine' dependency is not available."
-            )
+                "The optional legacy 'heuristics.engine.HeuristicEngine' dependency is not installed or failed to import. "
+                "This engine might be required for certain functionalities. Please ensure the 'heuristics' package is correctly installed if needed."
+            ) from _legacy_heuristic_engine_import_error
 
         def tag_flows(self, packets_df: pd.DataFrame) -> pd.DataFrame:
             raise NotImplementedError(
