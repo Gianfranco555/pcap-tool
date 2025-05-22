@@ -3,6 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, Dict, Optional
 
+# Compatibility import: expose the "HeuristicEngine" used by older modules
+try:  # pragma: no cover - optional dependency
+    from heuristics.engine import HeuristicEngine as HeuristicEngine  # type: ignore
+except Exception:  # pragma: no cover - fallback if not available
+    HeuristicEngine = None
+
 import pandas as pd
 import yaml
 
@@ -178,3 +184,8 @@ class VectorisedHeuristicEngine:
                 "flow_cause",
             ]
         ]
+
+
+__all__ = ["VectorisedHeuristicEngine"]
+if HeuristicEngine is not None:  # pragma: no cover - only if available
+    __all__.append("HeuristicEngine")

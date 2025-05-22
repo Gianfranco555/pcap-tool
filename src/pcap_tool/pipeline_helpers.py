@@ -139,7 +139,7 @@ def collect_stats(records: List[PcapRecord]) -> dict[str, Any]:
 
 def build_metrics(df: pd.DataFrame, heuristics_rules: Path) -> pd.DataFrame:
     """Tag ``df`` flows using the provided heuristic rules."""
-    from heuristics.engine import HeuristicEngine
+    from pcap_tool.heuristics.engine import HeuristicEngine
 
     engine = HeuristicEngine(str(heuristics_rules))
     return engine.tag_flows(df)
