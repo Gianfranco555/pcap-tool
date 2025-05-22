@@ -259,11 +259,11 @@ if metrics_output is not None:
         cols = st.columns(len(keys))
         for col, key in zip(cols, keys):
             val = sec.get(key, {})
-            if isinstance(val, dict):
-                if all(isinstance(v, int) for v in val.values()):
-                    count = sum(int(v) for v in val.values())
-                else:
-                    count = len(val)
+
+            if key == "outdated_tls_version_counts":
+                count = sum(int(v) for v in val.values()) if isinstance(val, dict) else 0
+            elif key == "connections_to_unusual_countries":
+                count = len(val) if isinstance(val, dict) else 0
             else:
                 count = int(val or 0)
             label = key.replace("_", " ").title()
