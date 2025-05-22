@@ -87,3 +87,16 @@ class SecurityAuditor:
 
         result["connections_to_unusual_countries"] = unusual_connections
         return result
+
+    def get_total_security_issue_count(self, security_findings: Dict[str, object]) -> int:
+        """Return the total number of security issues in ``security_findings``."""
+        count = 0
+        count += int(security_findings.get("plaintext_http_flows") or 0)
+        count += int(security_findings.get("self_signed_certificate_flows") or 0)
+        outdated = security_findings.get("outdated_tls_version_counts") or {}
+        if isinstance(outdated, dict):
+            count += sum(int(v) for v in outdated.values())
+        unusual = security_findings.get("connections_to_unusual_countries") or {}
+        if isinstance(unusual, dict):
+            count += len(unusual)
+        return count
