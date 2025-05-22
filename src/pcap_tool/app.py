@@ -12,6 +12,9 @@ import tempfile
 from pathlib import Path
 
 from pcap_tool.metrics.retransmission import categorize_retransmission_severity
+from pcap_tool.utils import render_status_pill
+from pcap_tool.analyze import ErrorSummarizer, SecurityAuditor
+from pcap_tool.enrichment import Enricher
 
 import pandas as pd
 import streamlit as st
@@ -78,6 +81,8 @@ if uploaded_file and st.button("Parse & Analyze"):
     progress.empty()
 
 if metrics_output is not None:
+    error_summarizer = ErrorSummarizer()
+    security_auditor = SecurityAuditor(Enricher())
     overview_tab, flows_tab, errors_tab, timeline_tab, ai_tab = st.tabs(
         ["Overview", "Flows", "Errors & Security", "Timeline", "AI Summary"]
     )
@@ -161,6 +166,22 @@ if metrics_output is not None:
         else:
             st.info("No TLS traffic detected")
 
+        err_summary = metrics_output.get("error_summary", {})
+        err_count = error_summarizer.get_total_error_count(err_summary)
+
+        sec_findings = metrics_output.get("security_findings", {})
+        sec_count = security_auditor.get_total_security_issue_count(sec_findings)
+
+        st.subheader("Errors & Security Overview")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown(render_status_pill("errors", err_count, True), unsafe_allow_html=True)
+        with col_b:
+            st.markdown(
+                render_status_pill("security issues", sec_count, True),
+                unsafe_allow_html=True,
+            )
+
     with flows_tab:
         flows_df = tagged_flow_df
         options = flows_df["l7_protocol_guess"].dropna().unique().tolist()
@@ -195,7 +216,14 @@ if metrics_output is not None:
 
     with errors_tab:
         st.subheader("Error Summary")
-        st.json(metrics_output.get("error_summary", {}))
+        summary = metrics_output.get("error_summary", {})
+        error_rows = error_summarizer.get_error_details_for_dataframe(summary)
+
+        if not error_rows:
+            st.markdown("No errors detected")
+        else:
+            st.dataframe(pd.DataFrame(error_rows), use_container_width=True)
+
         err_df = pd.DataFrame()
         required_cols = {
             "packet_error_reason",
@@ -215,9 +243,38 @@ if metrics_output is not None:
                 .reset_index()
             )
         st.subheader("Network Errors")
-        st.dataframe(err_df, use_container_width=True)
+        if err_df.empty:
+            st.markdown("No packet errors detected")
+        else:
+            st.dataframe(err_df, use_container_width=True)
+
         st.subheader("Security Findings")
-        st.json(metrics_output.get("security_findings", {}))
+        sec = metrics_output.get("security_findings", {})
+        keys = [
+            "plaintext_http_flows",
+            "outdated_tls_version_counts",
+            "self_signed_certificate_flows",
+            "connections_to_unusual_countries",
+        ]
+        cols = st.columns(len(keys))
+        for col, key in zip(cols, keys):
+            val = sec.get(key, {})
+            if isinstance(val, dict):
+                if all(isinstance(v, int) for v in val.values()):
+                    count = sum(int(v) for v in val.values())
+                else:
+                    count = len(val)
+            else:
+                count = int(val or 0)
+            label = key.replace("_", " ").title()
+            col.markdown(
+                render_status_pill(label, count, True),
+                unsafe_allow_html=True,
+            )
+
+        if st.session_state.get("debug_mode", False):
+            with st.expander("Raw Security Data (Debug)"):
+                st.json(sec)
 
     with timeline_tab:
         timeline = metrics_output.get("timeline_data", [])
