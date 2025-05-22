@@ -264,8 +264,7 @@ if metrics_output is not None:
                 count = sum(int(v) for v in val.values()) if isinstance(val, dict) else 0
             elif key == "connections_to_unusual_countries":
                 count = len(val) if isinstance(val, dict) else 0
-            else:
-                count = int(val or 0)
+                count = int(val or 0) if not isinstance(val, dict) else 0
             label = key.replace("_", " ").title()
             col.markdown(
                 render_status_pill(label, count, True),
