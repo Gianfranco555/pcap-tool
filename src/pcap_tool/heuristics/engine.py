@@ -14,6 +14,7 @@ try:  # pragma: no cover - optional dependency
 except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover - fallback if not available
     _legacy_heuristic_engine_import_error = e
 
+
 logger = get_logger(__name__)
 
 import pandas as pd
