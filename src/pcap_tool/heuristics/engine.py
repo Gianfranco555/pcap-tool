@@ -3,6 +3,34 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, Dict, Optional
 
+_LegacyHeuristicEngine = None
+_legacy_heuristic_engine_import_error: Optional[Exception] = None
+
+try:  # pragma: no cover - optional dependency
+    from heuristics.engine import HeuristicEngine as _ImportedLegacyHeuristicEngine  # type: ignore
+    _LegacyHeuristicEngine = _ImportedLegacyHeuristicEngine
+except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover - fallback if not available
+    _legacy_heuristic_engine_import_error = e
+
+if _LegacyHeuristicEngine is not None:
+    HeuristicEngine = _LegacyHeuristicEngine  # type: ignore
+else:
+    class HeuristicEngine:  # type: ignore
+        def __init__(self, *args, **kwargs) -> None:
+            if _legacy_heuristic_engine_import_error is not None:
+                raise ImportError(
+                    "The optional legacy 'heuristics.engine.HeuristicEngine' dependency is not installed or failed to import. "
+                    "This engine might be required for certain functionalities. Please ensure the 'heuristics' package is correctly installed if needed."
+                ) from _legacy_heuristic_engine_import_error
+            raise ImportError(
+                "The optional legacy 'heuristics.engine.HeuristicEngine' dependency is not available."
+            )
+
+        def tag_flows(self, packets_df: pd.DataFrame) -> pd.DataFrame:
+            raise NotImplementedError(
+                "Legacy HeuristicEngine is not available due to a missing optional dependency. Cannot call tag_flows."
+            )
+
 import pandas as pd
 import yaml
 
@@ -178,3 +206,6 @@ class VectorisedHeuristicEngine:
                 "flow_cause",
             ]
         ]
+
+
+__all__ = ["VectorisedHeuristicEngine", "HeuristicEngine"]

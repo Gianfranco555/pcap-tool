@@ -13,7 +13,7 @@ from .enrichment import Enricher
 from .enrich import service_guesser
 from .analyze import ErrorSummarizer, SecurityAuditor
 from .metrics_builder import MetricsBuilder
-from heuristics.engine import HeuristicEngine
+from pcap_tool.heuristics.engine import HeuristicEngine
 from .llm_summarizer import LLMSummarizer
 from .utils import safe_int_or_default
 from .pipeline_helpers import (
