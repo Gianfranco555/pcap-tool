@@ -15,7 +15,7 @@ from .metrics.stats_collector import StatsCollector
 from .metrics.timeline_builder import TimelineBuilder
 from .enrich.service_guesser import guess_service
 from .analyze import PerformanceAnalyzer, ErrorSummarizer, SecurityAuditor
-from heuristics.engine import HeuristicEngine
+from pcap_tool.heuristics.engine import HeuristicEngine
 
 if TYPE_CHECKING:  # pragma: no cover - imported for type hints only
     from .enrichment import Enricher
