@@ -23,6 +23,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 from pcap_tool.pipeline_app import run_analysis
+from pcap_tool.heuristics import guess_l7_protocol
 
 st.set_page_config(page_title="PCAP Analysis Tool")
 st.title("PCAP Analysis Tool")
@@ -184,7 +185,13 @@ if metrics_output is not None:
 
     with flows_tab:
         flows_df = tagged_flow_df
-        options = flows_df["l7_protocol_guess"].dropna().unique().tolist()
+        if "l7_protocol_guess" not in flows_df.columns and not flows_df.empty:
+            flows_df = flows_df.copy()
+            flows_df["l7_protocol_guess"] = flows_df.apply(
+                guess_l7_protocol, axis=1
+            )
+        options = flows_df.get("l7_protocol_guess", pd.Series(dtype=object))
+        options = options.dropna().unique().tolist()
         sel = st.multiselect("Filter by L7 Protocol", options)
         if sel:
             flows_show = flows_df[flows_df["l7_protocol_guess"].isin(sel)]
