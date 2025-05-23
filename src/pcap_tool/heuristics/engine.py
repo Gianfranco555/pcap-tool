@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Callable, Dict, Optional
 
 from pcap_tool.logging import get_logger
+from .dns_tls_mismatch import detect_dns_sni_mismatch
 
 _LegacyHeuristicEngine = None
 _legacy_heuristic_engine_import_error: Optional[Exception] = None
@@ -171,6 +172,8 @@ class VectorisedHeuristicEngine:
         )
 
         flow_df = pd.DataFrame(list(index), columns=cols)
+        flow_df = flow_df.reset_index(drop=True)
+        flow_df["flow_id"] = flow_df.index
         flow_df["handshake_complete"] = handshake_complete_full.values
         flow_df["data_both"] = data_both.values
         flow_df["rst_after_syn"] = rst_after_syn.values
@@ -203,8 +206,31 @@ class VectorisedHeuristicEngine:
 
     def tag_flows(self, packets_df: pd.DataFrame) -> pd.DataFrame:
         flows = self._aggregate_flows(packets_df)
-        return self._apply_rules(flows)[
+        tagged = self._apply_rules(flows)
+
+        mismatch = detect_dns_sni_mismatch(tagged)
+        if not mismatch.empty:
+            tagged = tagged.merge(
+                mismatch,
+                on="flow_id",
+                how="left",
+                suffixes=("", "_dns"),
+            )
+            update_mask = (
+                tagged["flow_disposition"].isin(["", "Unknown"])
+                & tagged["flow_disposition_dns"].notna()
+            )
+            tagged.loc[update_mask, "flow_disposition"] = tagged.loc[
+                update_mask, "flow_disposition_dns"
+            ]
+            tagged.loc[update_mask, "flow_cause"] = tagged.loc[
+                update_mask, "flow_cause_dns"
+            ]
+            tagged = tagged.drop(columns=["flow_disposition_dns", "flow_cause_dns"])
+
+        return tagged[
             [
+                "flow_id",
                 "client_ip",
                 "server_ip",
                 "client_port",
