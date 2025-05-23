@@ -13,7 +13,7 @@ from .enrichment import Enricher
 from .enrich import service_guesser
 from .analyze import ErrorSummarizer, SecurityAuditor
 from .metrics_builder import MetricsBuilder
-from pcap_tool.heuristics.engine import HeuristicEngine
+from pcap_tool.heuristics.engine import HeuristicEngine, VectorisedHeuristicEngine
 from .llm_summarizer import LLMSummarizer
 from .utils import safe_int_or_default
 from .pipeline_helpers import (
@@ -84,7 +84,10 @@ def run_analysis(
     )
 
     flow_summary_df, _ = stats["flow_table"].get_summary_df()
-    tagged_flow_df = build_metrics(flow_summary_df, rules_path)
+    if isinstance(heuristic_engine, VectorisedHeuristicEngine):
+        tagged_flow_df = heuristic_engine.tag_flows(stats["packet_df"])
+    else:
+        tagged_flow_df = build_metrics(flow_summary_df, rules_path)
     metrics_json = metrics_builder.build_metrics(stats["packet_df"], tagged_flow_df)
 
     llm_summarizer = LLMSummarizer()
