@@ -21,6 +21,11 @@ import pandas as pd
 import yaml
 
 
+def _is_http_407(df: pd.DataFrame) -> pd.Series:
+    """Return True for HTTP flows with status 407."""
+    return (df.get("proto") == "HTTP") & (df.get("http_status") == 407)
+
+
 class VectorisedHeuristicEngine:
     """Simple flow heuristic engine based on vectorised pandas operations."""
 
@@ -37,6 +42,19 @@ class VectorisedHeuristicEngine:
             "icmp_degraded": lambda df: df.get("icmp_error", False),
             "any": lambda df: pd.Series([True] * len(df), index=df.index),
         }
+        self._predicate_map["http_407"] = _is_http_407
+
+        proxy_rule = {
+            "name": "proxy_auth_failure",
+            "predicate": "http_407",
+            "flow_disposition": "Blocked",
+            "flow_cause": "Proxy Authentication Failed",
+        }
+        try:
+            idx = next(i for i, r in enumerate(self.rules) if r.get("name") == "Unknown")
+            self.rules.insert(idx, proxy_rule)
+        except StopIteration:
+            self.rules.append(proxy_rule)
 
     def _aggregate_flows(self, packets: pd.DataFrame) -> pd.DataFrame:
         cols = [
@@ -165,6 +183,10 @@ class VectorisedHeuristicEngine:
         df = df.copy()
         df["flow_disposition"] = ""
         df["flow_cause"] = ""
+
+        # ensure predicate registered each call
+        self._predicate_map.setdefault("http_407", _is_http_407)
+
         remaining = pd.Series(True, index=df.index)
         for rule in self.rules:
             pred_key = rule.get("predicate")
