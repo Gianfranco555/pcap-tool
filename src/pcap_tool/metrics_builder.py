@@ -16,6 +16,7 @@ from .metrics.timeline_builder import TimelineBuilder
 from .enrich.service_guesser import guess_service
 from .analyze import PerformanceAnalyzer, ErrorSummarizer, SecurityAuditor
 from pcap_tool.heuristics.engine import HeuristicEngine
+from pcap_tool.heuristics.metrics import count_tls_versions
 
 if TYPE_CHECKING:  # pragma: no cover - imported for type hints only
     from .enrichment import Enricher
@@ -100,6 +101,7 @@ class MetricsBuilder:
         "protocols": {},
         "top_ports": {},
         "quic_vs_tls_packets": {},
+        "tls_version_counts": {},
         "top_talkers_by_bytes": [],
         "top_talkers_by_packets": [],
         "service_overview": {},
@@ -150,6 +152,7 @@ class MetricsBuilder:
             "protocols": {},
             "top_ports": {},
             "quic_vs_tls_packets": {},
+            "tls_version_counts": {},
             "top_talkers_by_bytes": [],
             "top_talkers_by_packets": [],
             "service_overview": {},
@@ -165,6 +168,9 @@ class MetricsBuilder:
         metrics["protocols"] = sc_summary.get("protocols", {})
         metrics["top_ports"] = sc_summary.get("top_ports", {})
         metrics["quic_vs_tls_packets"] = sc_summary.get("quic_vs_tls_packets", {})
+        metrics["tls_version_counts"] = count_tls_versions(
+            packet_df_for_enrich_detail.to_dict(orient="records")
+        ) if not packet_df_for_enrich_detail.empty else {}
 
         # Flow table summaries
         df_bytes, df_pkts = self.flow_table.get_summary_df()
