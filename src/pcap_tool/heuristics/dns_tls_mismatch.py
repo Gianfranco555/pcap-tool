@@ -67,7 +67,7 @@ def detect_dns_sni_mismatch(flows: pd.DataFrame) -> pd.DataFrame:
             if pd.isna(dns_ts) or pd.isna(ts):
                 continue
             diff = (ts - dns_ts).total_seconds()
-            if 0 <= diff <= 60:
+            if 0 <= diff <= DNS_TLS_MAX_AGE_SECONDS: # Assumes DNS_TLS_MAX_AGE_SECONDS is defined
                 answers.update(addrs)
         if answers and str(getattr(row, dst_col)) not in answers:
             mismatches.append(
