@@ -184,7 +184,8 @@ if metrics_output is not None:
 
     with flows_tab:
         flows_df = tagged_flow_df
-        options = flows_df["l7_protocol_guess"].dropna().unique().tolist()
+        options = flows_df.get("l7_protocol_guess", pd.Series(dtype=object))
+        options = options.dropna().unique().tolist()
         sel = st.multiselect("Filter by L7 Protocol", options)
         if sel:
             flows_show = flows_df[flows_df["l7_protocol_guess"].isin(sel)]

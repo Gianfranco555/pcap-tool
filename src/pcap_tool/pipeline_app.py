@@ -14,6 +14,7 @@ from .enrich import service_guesser
 from .analyze import ErrorSummarizer, SecurityAuditor
 from .metrics_builder import MetricsBuilder
 from pcap_tool.heuristics.engine import HeuristicEngine, VectorisedHeuristicEngine
+from pcap_tool.heuristics import guess_l7_protocol
 from .llm_summarizer import LLMSummarizer
 from .utils import safe_int_or_default
 from .pipeline_helpers import (
@@ -88,6 +89,12 @@ def run_analysis(
         tagged_flow_df = heuristic_engine.tag_flows(stats["packet_df"])
     else:
         tagged_flow_df = build_metrics(flow_summary_df, rules_path)
+
+    if "l7_protocol_guess" not in tagged_flow_df.columns and not tagged_flow_df.empty:
+        tagged_flow_df = tagged_flow_df.copy()
+        tagged_flow_df["l7_protocol_guess"] = tagged_flow_df.apply(
+            guess_l7_protocol, axis=1
+        )
     metrics_json = metrics_builder.build_metrics(stats["packet_df"], tagged_flow_df)
 
     llm_summarizer = LLMSummarizer()
