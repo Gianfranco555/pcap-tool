@@ -19,3 +19,9 @@ rules:
     predicate: any
     flow_cause: "Unusual destination country"
     flow_disposition: Unusual
+
+  # Corresponds to the http_407 predicate in engine.py
+  - name: proxy_auth_failure
+    predicate: http_407
+    flow_disposition: "Blocked"
+    flow_cause: "Proxy Authentication Failed"
