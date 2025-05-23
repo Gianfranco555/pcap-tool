@@ -19,3 +19,11 @@ rules:
     predicate: any
     flow_cause: "Unusual destination country"
     flow_disposition: Unusual
+
+# --- HTTP 407 = proxy auth failure ---------------------------------
+  - name: proxy_auth_failure
+    match:
+      proto: "HTTP"
+      http_status: 407
+    disposition: "Blocked"
+    cause: "Proxy Authentication Failed"
