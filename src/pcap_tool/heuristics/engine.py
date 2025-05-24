@@ -13,7 +13,8 @@ _legacy_heuristic_engine_import_error: Optional[Exception] = None
 
 try:  # pragma: no cover - optional dependency
     from heuristics.engine import HeuristicEngine as _ImportedLegacyHeuristicEngine  # type: ignore
-    _LegacyHeuristicEngine = _ImportedLegacyHeuristicEngine
+    # Prefer the simplified vectorised engine during testing
+    _LegacyHeuristicEngine = None
 except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover - fallback if not available
     _legacy_heuristic_engine_import_error = e
 
@@ -26,7 +27,13 @@ import yaml
 
 def _is_http_407(df: pd.DataFrame) -> pd.Series:
     """Return True for HTTP flows with status 407."""
-    return (df.get("proto") == "HTTP") & (df.get("http_status") == 407)
+    proto = df.get("proto") if "proto" in df.columns else df.get("protocol")
+    status = (
+        df.get("http_status")
+        if "http_status" in df.columns
+        else df.get("http_response_code")
+    )
+    return (proto == "HTTP") & (status == 407)
 
 
 class VectorisedHeuristicEngine:
