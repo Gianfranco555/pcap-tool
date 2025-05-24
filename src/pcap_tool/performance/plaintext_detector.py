@@ -22,8 +22,9 @@ def _is_plain_packet(pkt: Mapping[str, Any]) -> bool:
     except (TypeError, ValueError):
         port_int = None
     if proto == "TCP" and port_int == 80:
+        # Check for HTTP on port 80, but exclude TLS/SSL
         http_method = method or str(pkt.get("http_request_method") or "").upper()
-        if http_method:
+        if http_method and 'TLS' not in str(pkt.get("protocol") or pkt.get("proto") or "").upper():
             return True
     return False
 
