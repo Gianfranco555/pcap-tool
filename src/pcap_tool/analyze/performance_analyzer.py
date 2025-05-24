@@ -22,6 +22,8 @@ class PerformanceAnalyzer:
         self.rtt_samples_ms: List[float] = []
         self.tcp_total_packets: int = 0
         self.tcp_retransmissions: int = 0
+        self.tls_handshake_start: defaultdict[str, float | None] = defaultdict(lambda: None)
+        self.tls_alert_deltas_ms: List[float] = []
         # Placeholder for potential QUIC tracking
         # self.quic_initial_packets: Dict[str, float] = {}
 
@@ -113,6 +115,17 @@ class PerformanceAnalyzer:
                         "client_seq": None,
                     }
 
+        if record.tls_handshake_type and self.tls_handshake_start[flow_id_str] is None:
+            self.tls_handshake_start[flow_id_str] = record.timestamp
+
+        if record.tls_alert_message_description or record.tcp_flags_rst:
+            start_ts = self.tls_handshake_start.get(flow_id_str)
+            if start_ts is not None:
+                delta = (record.timestamp - start_ts) * 1000.0
+                if delta >= 0:
+                    self.tls_alert_deltas_ms.append(delta)
+                self.tls_handshake_start[flow_id_str] = None
+
     def get_summary(self) -> Dict[str, object]:
         """Return aggregated performance metrics."""
         if self.rtt_samples_ms:
@@ -134,8 +147,20 @@ class PerformanceAnalyzer:
         else:
             retrans_percent = 0.0
 
+        if self.rtt_samples_ms:
+            tcp_syn_rtt_ms = float(np.median(np.array(self.rtt_samples_ms)))
+        else:
+            tcp_syn_rtt_ms = float("nan")
+
+        if self.tls_alert_deltas_ms:
+            tls_time_to_alert_ms = float(np.median(np.array(self.tls_alert_deltas_ms)))
+        else:
+            tls_time_to_alert_ms = float("nan")
+
         return {
             "tcp_rtt_ms": rtt_summary,
+            "tcp_syn_rtt_ms": tcp_syn_rtt_ms,
+            "tls_time_to_alert_ms": tls_time_to_alert_ms,
             "tcp_retransmission_ratio_percent": retrans_percent,
             "rtt_limited_data": rtt_limited,
         }
