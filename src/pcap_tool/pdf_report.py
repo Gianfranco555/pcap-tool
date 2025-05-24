@@ -15,6 +15,42 @@ from .exceptions import ReportGenerationError
 from .metrics_builder import select_top_flows
 
 
+def _add_service_overview(elements: list, styles, overview: Dict[str, Any]) -> None:
+    """Append a bulleted service overview section."""
+    try:  # pragma: no cover - optional dependency
+        from reportlab.platypus import Paragraph, Spacer
+    except Exception:  # pragma: no cover - dependency may be missing
+        return
+
+    if not overview:
+        return
+
+    elements.append(Paragraph("Service Overview", styles["Heading2"]))
+    for service, info in overview.items():
+        count = info.get("flow_count") if isinstance(info, dict) else info
+        if count is None:
+            count = info.get("count", 0) if isinstance(info, dict) else 0
+        elements.append(Paragraph(f"{service} - {count}", styles["Bullet"]))
+    elements.append(Spacer(1, 12))
+
+
+def _add_error_summary(elements: list, styles, summary: Dict[str, Any]) -> None:
+    """Append a bulleted error summary section."""
+    try:  # pragma: no cover - optional dependency
+        from reportlab.platypus import Paragraph, Spacer
+    except Exception:  # pragma: no cover - dependency may be missing
+        return
+
+    if not summary:
+        return
+
+    elements.append(Paragraph("Error Summary", styles["Heading2"]))
+    for err, info in summary.items():
+        count = info.get("count") if isinstance(info, dict) else info
+        elements.append(Paragraph(f"{err} - {count}", styles["Bullet"]))
+    elements.append(Spacer(1, 12))
+
+
 def _sparkline_chart(values: list[int]) -> bytes:
     """Return a tiny bar chart PNG for sparkline values."""
     if not values:
@@ -193,12 +229,8 @@ def _build_elements(
             elements.append(Paragraph(f"{k}: {v}", styles["Normal"]))
         elements.append(Spacer(1, 12))
 
-    errors = metrics_json.get("error_summary", {})
-    if errors:
-        elements.append(Paragraph("Error Summary", styles["Heading2"]))
-        for k, v in errors.items():
-            elements.append(Paragraph(f"{k}: {v}", styles["Normal"]))
-        elements.append(Spacer(1, 12))
+    _add_service_overview(elements, styles, metrics_json.get("service_overview", {}))
+    _add_error_summary(elements, styles, metrics_json.get("error_summary", {}))
 
     sec = metrics_json.get("security_findings", {})
     if sec:
