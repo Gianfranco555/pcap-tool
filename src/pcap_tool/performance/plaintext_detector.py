@@ -31,7 +31,10 @@ def _is_plain_packet(pkt: Mapping[str, Any]) -> bool:
 
 
 def _get_packet_field(pkt: Mapping[str, Any], key: str) -> Any:
-    """Safely retrieve a packet field, returning ``None`` if not found."""
+    """Safely retrieve a packet field.
+
+    Return ``None`` if the field is not present.
+    """
     return pkt.get(key)
 
 
