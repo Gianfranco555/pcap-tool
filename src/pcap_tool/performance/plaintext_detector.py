@@ -15,6 +15,7 @@ def _is_plain_packet(pkt: Mapping[str, Any]) -> bool:
         return True
 
     if proto == "HTTP":
+        # Assuming all HTTP traffic is plaintext for simplicity. Refine if needed.
         return True
 
     port = pkt.get("destination_port") or pkt.get("dest_port")
