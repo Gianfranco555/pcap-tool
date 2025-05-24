@@ -66,6 +66,8 @@ These changes keep the codebase production-ready while letting you run everythin
 * tshark (will be installed by the setup script if using one, or needs manual install)
 * [Node.js & npm/yarn - if frontend setup is included]
 * [Docker - if docker-compose.dev.yml is a primary setup method]
+* Key Python packages like `pandas`, `scapy`, `pyshark` (and the optional
+  `pypcapkit` fallback).  These are managed through `requirements.txt`.
 
 ## Local Development Setup
 
@@ -121,9 +123,14 @@ These changes keep the codebase production-ready while letting you run everythin
 
 ## Running Tests
 
+Install the dependencies listed in `requirements.txt` before running the test
+suite:
+
 ```bash
+pip install -r requirements.txt
 pytest
 ```
+You can also run `make setup` to install everything needed for local testing.
 
 ### Data Columns
 
