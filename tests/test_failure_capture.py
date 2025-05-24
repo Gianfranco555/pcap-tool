@@ -1,0 +1,51 @@
+import pandas as pd
+import pytest
+from pathlib import Path
+
+from pcap_tool.pipeline_helpers import collect_stats
+from pcap_tool.models import PcapRecord
+from pcap_tool.heuristics.engine import HeuristicEngine
+from pcap_tool.metrics_builder import MetricsBuilder
+from pcap_tool.enrichment import Enricher
+from pcap_tool.enrich.service_guesser import guess_service
+from pcap_tool.analyze import ErrorSummarizer, SecurityAuditor
+
+
+@pytest.mark.slow
+def test_failure_capture_pipeline():
+    df = pd.read_csv(Path('tests/fixtures/Failure_Pcap.csv'))
+    records = [PcapRecord(**row) for row in df.to_dict(orient='records')]
+    stats = collect_stats(records)
+
+    engine = HeuristicEngine('src/heuristics/rules.yaml')
+    tagged = engine.tag_flows(stats['packet_df'])
+
+    mb = MetricsBuilder(
+        stats['stats_collector'],
+        stats['flow_table'],
+        Enricher(),
+        guess_service,
+        stats['performance_analyzer'],
+        stats['timeline_builder'],
+        ErrorSummarizer(),
+        SecurityAuditor(Enricher()),
+        engine,
+    )
+
+    metrics = mb.build_metrics(stats['packet_df'], tagged)
+
+    cause_col = tagged['flow_cause'] if 'flow_cause' in tagged.columns else pd.Series([None] * len(tagged))
+    assert ((tagged['flow_disposition'] == 'Blocked') & (cause_col == 'Proxy Authentication Failed')).any()
+
+    assert (tagged['flow_disposition'] == 'Mis-routed').any()
+
+    plaintext_count = metrics.get('security_findings', {}).get('plaintext_http_flows', 0)
+    assert plaintext_count > 0
+
+    err_summary = metrics.get('error_summary', {})
+    tls_fail = err_summary.get('TLS Handshake Failure')
+    if isinstance(tls_fail, dict):
+        count = tls_fail.get('count', 0)
+    else:
+        count = tls_fail or 0
+    assert count >= 1
