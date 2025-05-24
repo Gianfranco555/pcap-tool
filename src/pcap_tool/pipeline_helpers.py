@@ -141,6 +141,31 @@ def build_metrics(df: pd.DataFrame, heuristics_rules: Path) -> pd.DataFrame:
     """Tag ``df`` flows using the provided heuristic rules."""
     from pcap_tool.heuristics.engine import HeuristicEngine
 
+    if {
+        "source_ip",
+        "destination_ip",
+        "source_port",
+        "destination_port",
+    }.issubset(df.columns) is False:
+        rename_map = {
+            "src_ip": "source_ip",
+            "dest_ip": "destination_ip",
+            "src_port": "source_port",
+            "dest_port": "destination_port",
+        }
+        df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+
+    if "timestamp" not in df.columns:
+        df = df.copy()
+        df["timestamp"] = 0
+
+    if "is_source_client" not in df.columns and "is_src_client" not in df.columns:
+        # ``VectorisedHeuristicEngine`` requires an orientation column. When
+        # provided only with a flow summary table (as in ``get_summary_df``),
+        # fabricate a default orientation so heuristics can run.
+        df = df.copy()
+        df["is_source_client"] = True
+
     engine = HeuristicEngine(str(heuristics_rules))
     return engine.tag_flows(df)
 
