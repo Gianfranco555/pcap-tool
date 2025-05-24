@@ -1,0 +1,5 @@
+frame_number,timestamp,source_ip,destination_ip,source_port,destination_port,protocol,http_request_method
+1,1.0,10.0.0.1,93.184.216.34,54321,443,HTTP,CONNECT
+2,2.0,10.0.0.1,93.184.216.34,54321,443,HTTPS/TLS,
+3,3.0,10.0.0.1,93.184.216.34,54321,443,TCP,
+4,4.0,10.0.0.2,93.184.216.34,12345,80,HTTP,GET
