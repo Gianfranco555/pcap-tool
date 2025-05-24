@@ -43,3 +43,13 @@ def test_tls_handshake_outcome_and_blocking():
     assert fail_row.flow_disposition == "Blocked"
     assert fail_row.flow_cause == "TLS Handshake Failure"
     assert fail_row.time_to_alert == pytest.approx(0.2)
+
+
+def test_tls_handshake_missing_timestamp_raises():
+    packets = [
+        _pkt(0.0, "1.1.1.1", "2.2.2.2", 1111, 443, True, hs_type="ClientHello"),
+        _pkt(0.1, "2.2.2.2", "1.1.1.1", 443, 1111, False, hs_type="ServerHello"),
+    ]
+    df = pd.DataFrame(packets).drop(columns=["timestamp"])
+    with pytest.raises(ValueError):
+        get_tls_handshake_outcome(df)

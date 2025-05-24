@@ -24,6 +24,11 @@ def get_tls_handshake_outcome(packets_df: pd.DataFrame) -> pd.DataFrame:
         :func:`VectorisedHeuristicEngine._aggregate_flows` and columns
         ``tls_handshake_ok`` (boolean), ``first_alert_time`` and
         ``time_to_alert``.
+
+    Raises
+    ------
+    ValueError
+        If the orientation or ``timestamp`` columns are missing.
     """
     if packets_df.empty:
         return pd.DataFrame(
@@ -45,7 +50,7 @@ def get_tls_handshake_outcome(packets_df: pd.DataFrame) -> pd.DataFrame:
     df["client_port"] = np.where(df[orient_col], df["source_port"], df["destination_port"])
     df["server_port"] = np.where(df[orient_col], df["destination_port"], df["source_port"])
     if "timestamp" not in df.columns:
-        df["timestamp"] = pd.NA
+        raise ValueError("timestamp column required for TLS analysis")
 
     groups = df.groupby(cols)
     index = groups.size().index
