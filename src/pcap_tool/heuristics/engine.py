@@ -5,6 +5,7 @@ from typing import Callable, Dict, Optional
 
 from pcap_tool.logging import get_logger
 from .dns_tls_mismatch import detect_dns_sni_mismatch
+from pcap_tool.parsers.tls import get_tls_handshake_outcome
 
 _LegacyHeuristicEngine = None
 _legacy_heuristic_engine_import_error: Optional[Exception] = None
@@ -206,6 +207,15 @@ class VectorisedHeuristicEngine:
 
     def tag_flows(self, packets_df: pd.DataFrame) -> pd.DataFrame:
         flows = self._aggregate_flows(packets_df)
+
+        tls_outcome = get_tls_handshake_outcome(packets_df)
+        if tls_outcome.empty:
+            flows["tls_handshake_ok"] = pd.NA
+            flows["first_alert_time"] = pd.NA
+            flows["time_to_alert"] = pd.NA
+        else:
+            flows = flows.merge(tls_outcome, on="flow_id", how="left")
+
         tagged = self._apply_rules(flows)
 
         mismatch = detect_dns_sni_mismatch(tagged)
@@ -228,6 +238,11 @@ class VectorisedHeuristicEngine:
             ]
             tagged = tagged.drop(columns=["flow_disposition_dns", "flow_cause_dns"])
 
+        # apply TLS handshake outcome override
+        mask_fail = tagged["tls_handshake_ok"] == False
+        tagged.loc[mask_fail, "flow_disposition"] = "Blocked"
+        tagged.loc[mask_fail, "flow_cause"] = "TLS Handshake Failure"
+
         return tagged[
             [
                 "flow_id",
@@ -238,6 +253,9 @@ class VectorisedHeuristicEngine:
                 "protocol",
                 "flow_disposition",
                 "flow_cause",
+                "tls_handshake_ok",
+                "first_alert_time",
+                "time_to_alert",
             ]
         ]
 

@@ -999,7 +999,10 @@ def _parse_with_pyshark(
                 yield record_obj
                 generated_records += 1
             except AttributeError as ae: # This should be less common with _get_pyshark_layer_attribute
-                logger.warning(f"Frame {packet_count}: Attribute error processing packet details: {ae}. Packet Layers: {[l.layer_name for l in packet.layers if hasattr(l, 'layer_name')]}", exc_info=False) # exc_info=False to reduce noise if frequent
+                logger.warning(
+                    f"Frame {packet_count}: Attribute error processing packet details: {ae}. Packet Layers: {[layer.layer_name for layer in packet.layers if hasattr(layer, 'layer_name')]}",
+                    exc_info=False,
+                )  # exc_info=False to reduce noise if frequent
             except Exception as e_pkt: # Catch-all for other unexpected errors per packet
                 logger.error(f"Frame {packet_count}: Error processing packet: {e_pkt}. Skipping.", exc_info=True) # Keep exc_info for unexpected
 
