@@ -6,6 +6,7 @@ from typing import Callable, Dict, Optional
 from pcap_tool.logging import get_logger
 from .dns_tls_mismatch import detect_dns_sni_mismatch
 from pcap_tool.parsers.tls import get_tls_handshake_outcome
+from pcap_tool.enrichment.icmp_correlator import correlate_icmp_errors
 
 _LegacyHeuristicEngine = None
 _legacy_heuristic_engine_import_error: Optional[Exception] = None
@@ -179,6 +180,7 @@ class VectorisedHeuristicEngine:
         flow_df["data_both"] = data_both.values
         flow_df["rst_after_syn"] = rst_after_syn.values
         flow_df["icmp_error"] = icmp_error.values
+        flow_df["icmp_error_count"] = 0
         flow_df["first_syn_time"] = first_syn_full.values
         flow_df["first_rst_time"] = rst_time_full.values
         return flow_df
@@ -207,6 +209,9 @@ class VectorisedHeuristicEngine:
 
     def tag_flows(self, packets_df: pd.DataFrame) -> pd.DataFrame:
         flows = self._aggregate_flows(packets_df)
+
+        # correlate downstream ICMP errors with the originating flows
+        flows = correlate_icmp_errors(packets_df, flows)
 
         tls_outcome = get_tls_handshake_outcome(packets_df)
         if tls_outcome.empty:
@@ -243,6 +248,13 @@ class VectorisedHeuristicEngine:
         tagged.loc[mask_fail, "flow_disposition"] = "Blocked"
         tagged.loc[mask_fail, "flow_cause"] = "TLS Handshake Failure"
 
+        # heuristic: degraded flows indicated only by downstream ICMP errors
+        icmp_mask = (
+            tagged.get("icmp_error_count", 0) > 0
+        ) & (tagged["flow_disposition"].isin(["", "Unknown"]))
+        tagged.loc[icmp_mask, "flow_disposition"] = "Degraded"
+        tagged.loc[icmp_mask, "flow_cause"] = "Downstream ICMP errors"
+
         return tagged[
             [
                 "flow_id",
@@ -253,6 +265,7 @@ class VectorisedHeuristicEngine:
                 "protocol",
                 "flow_disposition",
                 "flow_cause",
+                "icmp_error_count",
                 "tls_handshake_ok",
                 "first_alert_time",
                 "time_to_alert",

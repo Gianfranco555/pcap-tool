@@ -7,16 +7,21 @@ import socket
 from functools import lru_cache
 from typing import Any, Callable, Optional
 
-try:
-    from geoip2.database import Reader
-    from geoip2.errors import AddressNotFoundError
+try:  # pragma: no cover - optional dependency
+    import geoip2.database
+    import geoip2.errors
 except Exception:  # pragma: no cover - library may not be installed
+    geoip2 = None  # type: ignore
+
     Reader = None  # type: ignore
 
     class AddressNotFoundError(Exception):
         """Fallback error if geoip2 is unavailable."""
 
         pass
+else:  # pragma: no cover - library available
+    Reader = geoip2.database.Reader  # type: ignore
+    AddressNotFoundError = geoip2.errors.AddressNotFoundError  # type: ignore
 
 logger = get_logger(__name__)
 
@@ -49,24 +54,24 @@ class Enricher:
         self._rdns_cache: dict[str, str | None] = {}
         self._country_lookup_cached: Callable[[str], str | None] | None = None
 
-        if geoip_city_db_path and Reader is not None:
+        if geoip_city_db_path and geoip2 is not None:
             logger.debug("GeoIP City database path provided: %s", geoip_city_db_path)
             try:
-                self.geoip_city_reader = Reader(geoip_city_db_path)
+                self.geoip_city_reader = geoip2.database.Reader(geoip_city_db_path)
             except Exception:
                 logger.exception("Failed to open GeoIP City database at %s", geoip_city_db_path)
 
-        if geoip_asn_db_path and Reader is not None:
+        if geoip_asn_db_path and geoip2 is not None:
             logger.debug("GeoIP ASN database path provided: %s", geoip_asn_db_path)
             try:
-                self.geoip_asn_reader = Reader(geoip_asn_db_path)
+                self.geoip_asn_reader = geoip2.database.Reader(geoip_asn_db_path)
             except Exception:
                 logger.exception("Failed to open GeoIP ASN database at %s", geoip_asn_db_path)
 
-        if geoip_country_db_path and Reader is not None:
+        if geoip_country_db_path and geoip2 is not None:
             logger.debug("GeoIP Country database path provided: %s", geoip_country_db_path)
             try:
-                self.geoip_country_reader = Reader(geoip_country_db_path)
+                self.geoip_country_reader = geoip2.database.Reader(geoip_country_db_path)
                 self._country_lookup_cached = lru_cache(maxsize=10000)(self._lookup_country)  # type: ignore[misc]
             except Exception:
                 logger.exception("Failed to open GeoIP Country database at %s", geoip_country_db_path)
@@ -86,7 +91,7 @@ class Enricher:
     def get_geoip(self, ip: str) -> Optional[dict]:
         """Lookup GeoIP information for an IP address."""
         logger.debug("GeoIP lookup for: %s", ip)
-        if not self.geoip_city_reader or Reader is None:
+        if not self.geoip_city_reader or geoip2 is None:
             return None
 
         try:
@@ -108,7 +113,7 @@ class Enricher:
     def get_asn(self, ip: str) -> Optional[dict]:
         """Lookup ASN information for an IP address."""
         logger.debug("ASN lookup for: %s", ip)
-        if not self.geoip_asn_reader or Reader is None:
+        if not self.geoip_asn_reader or geoip2 is None:
             return None
 
         try:
@@ -149,7 +154,7 @@ class Enricher:
                 socket.setdefaulttimeout(old_timeout)
 
     def _lookup_country(self, ip: str) -> Optional[str]:
-        if not self.geoip_country_reader or Reader is None:
+        if not self.geoip_country_reader or geoip2 is None:
             return None
         try:
             resp = self.geoip_country_reader.country(ip)
