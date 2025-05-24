@@ -32,12 +32,18 @@ def count_plaintext_http_flows(records: Iterable[Mapping[str, Any]]) -> int:
     """Return number of unique flows containing plaintext HTTP packets."""
     flows = set()
     for pkt in records:
+def _get_packet_field(pkt: Mapping[str, Any], key: str) -> Any:
+    """Safely retrieve a packet field, returning None if not found."""
+    return pkt.get(key)
+
+
+    for pkt in records:
         if _is_plain_packet(pkt):
-            src_ip = pkt.get("source_ip") or pkt.get("src_ip")
-            dst_ip = pkt.get("destination_ip") or pkt.get("dest_ip")
-            src_port = pkt.get("source_port") or pkt.get("src_port")
-            dst_port = pkt.get("destination_port") or pkt.get("dest_port")
-            proto = str(pkt.get("protocol") or pkt.get("proto") or "").upper()
+            src_ip = _get_packet_field(pkt, "source_ip") or _get_packet_field(pkt, "src_ip")
+            dst_ip = _get_packet_field(pkt, "destination_ip") or _get_packet_field(pkt, "dest_ip")
+            src_port = _get_packet_field(pkt, "source_port") or _get_packet_field(pkt, "src_port")
+            dst_port = _get_packet_field(pkt, "destination_port") or _get_packet_field(pkt, "dest_port")
+            proto = str(_get_packet_field(pkt, "protocol") or _get_packet_field(pkt, "proto") or "").upper()
             flows.add((src_ip, dst_ip, src_port, dst_port, proto))
     return len(flows)
 
