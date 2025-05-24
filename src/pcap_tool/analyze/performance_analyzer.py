@@ -118,7 +118,7 @@ class PerformanceAnalyzer:
         if record.tls_handshake_type and self.tls_handshake_start[flow_id_str] is None:
             self.tls_handshake_start[flow_id_str] = record.timestamp
 
-        if record.tls_alert_message_description or record.tcp_flags_rst:
+        if record.tls_alert_message_description:
             start_ts = self.tls_handshake_start.get(flow_id_str)
             if start_ts is not None:
                 delta = (record.timestamp - start_ts) * 1000.0
