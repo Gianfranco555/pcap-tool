@@ -11,6 +11,7 @@ def _is_plain_packet(pkt: Mapping[str, Any]) -> bool:
     method = str(pkt.get("http_request_method") or pkt.get("http_method") or "").upper()
 
     if proto == "HTTP" and method == "CONNECT":
+        # HTTP CONNECT is treated as plaintext due to [REASON - e.g., lack of encryption]
         return True
 
     if proto == "HTTP":
