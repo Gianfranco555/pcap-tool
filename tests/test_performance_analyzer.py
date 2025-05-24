@@ -1,3 +1,5 @@
+import math
+import pytest
 from pcap_tool.analyze import PerformanceAnalyzer
 from pcap_tool.models import PcapRecord
 
@@ -44,6 +46,8 @@ def test_tcp_rtt_basic():
     rtt = summary["tcp_rtt_ms"]
     assert rtt["samples"] == 1
     assert 199 <= rtt["median"] <= 201
+    assert 199 <= summary["tcp_syn_rtt_ms"] <= 201
+    assert math.isnan(summary["tls_time_to_alert_ms"])
     assert summary["tcp_retransmission_ratio_percent"] == 0.0
     assert summary["rtt_limited_data"] is False
 
@@ -75,3 +79,23 @@ def test_rtt_limited_data_flag():
     analyzer.add_packet(syn, "f", True)
     summary = analyzer.get_summary()
     assert summary["rtt_limited_data"] is True
+
+
+def test_tls_time_to_alert():
+    analyzer = PerformanceAnalyzer()
+    ch = PcapRecord(
+        frame_number=1,
+        timestamp=1.0,
+        protocol="TCP",
+        tls_handshake_type="ClientHello",
+    )
+    alert = PcapRecord(
+        frame_number=2,
+        timestamp=1.1,
+        protocol="TCP",
+        tls_alert_message_description="handshake_failure",
+    )
+    analyzer.add_packet(ch, "tls", True)
+    analyzer.add_packet(alert, "tls", False)
+    summary = analyzer.get_summary()
+    assert summary["tls_time_to_alert_ms"] == pytest.approx(100.0)

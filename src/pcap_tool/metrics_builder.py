@@ -106,7 +106,13 @@ class MetricsBuilder:
         "top_talkers_by_packets": [],
         "service_overview": {},
         "error_summary": {},
-        "performance_metrics": {},
+        "performance_metrics": {
+            "tcp_rtt_ms": {},
+            "tcp_syn_rtt_ms": None,
+            "tls_time_to_alert_ms": None,
+            "tcp_retransmission_ratio_percent": 0.0,
+            "rtt_limited_data": False,
+        },
         "security_findings": {},
         "timeline_data": [],
     }
