@@ -13,8 +13,8 @@ _legacy_heuristic_engine_import_error: Optional[Exception] = None
 
 try:  # pragma: no cover - optional dependency
     from heuristics.engine import HeuristicEngine as _ImportedLegacyHeuristicEngine  # type: ignore
-    # Prefer the simplified vectorised engine during testing
-    _LegacyHeuristicEngine = None
+    # use the legacy engine when available
+    _LegacyHeuristicEngine = _ImportedLegacyHeuristicEngine
 except (ImportError, ModuleNotFoundError) as e:  # pragma: no cover - fallback if not available
     _legacy_heuristic_engine_import_error = e
 
