@@ -3,6 +3,10 @@ from __future__ import annotations
 import pandas as pd
 from typing import List, Tuple, Dict, Any
 
+# Maximum age in seconds for a DNS answer to be considered relevant to a TLS
+# connection when checking for mismatches.
+DNS_TLS_MAX_AGE_SECONDS = 60
+
 
 def _pick_column(df: pd.DataFrame, names: List[str]) -> str | None:
     for name in names:
