@@ -4,7 +4,7 @@ import pandas as pd
 from typing import Dict, Tuple, Any
 
 
-Key = Tuple[Any, Any, Any, Any]
+Key = Tuple[Optional[str], Optional[int], Optional[str], Optional[Any]]
 
 
 def correlate_icmp_errors(packets: pd.DataFrame, flows: pd.DataFrame) -> pd.DataFrame:
