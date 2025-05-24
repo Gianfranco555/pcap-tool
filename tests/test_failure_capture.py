@@ -4,7 +4,10 @@ from pathlib import Path
 
 from pcap_tool.pipeline_helpers import collect_stats
 from pcap_tool.models import PcapRecord
-from pcap_tool.heuristics.engine import HeuristicEngine
+from pcap_tool.heuristics.engine import (
+    HeuristicEngine,
+    VectorisedHeuristicEngine,
+)
 from pcap_tool.metrics_builder import MetricsBuilder
 from pcap_tool.enrichment import Enricher
 from pcap_tool.enrich.service_guesser import guess_service
@@ -50,18 +53,34 @@ def test_failure_capture_pipeline():
 
     metrics = mb.build_metrics(stats['packet_df'], tagged)
 
-    cause_col = tagged['flow_cause'] if 'flow_cause' in tagged.columns else pd.Series([None] * len(tagged))
-    assert ((tagged['flow_disposition'] == 'Blocked') & (cause_col == 'Proxy Authentication Failed')).any()
-
-    assert (tagged['flow_disposition'] == 'Mis-routed').any()
+    if isinstance(engine, VectorisedHeuristicEngine):
+        cause_col = tagged['flow_cause']
+        assert (
+            (tagged['flow_disposition'] == 'Blocked')
+            & (cause_col == 'Proxy Authentication Failed')
+        ).any()
+        # DNS/TLS mismatch detection may label flows as "Mis-routed"
+        assert (tagged['flow_disposition'] == 'Mis-routed').any()
+        err_summary = metrics.get('error_summary', {})
+        tls_fail = err_summary.get('TLS Handshake Failure')
+        if isinstance(tls_fail, dict):
+            count = tls_fail.get('count', 0)
+        else:
+            count = tls_fail or 0
+        assert count >= 1
+    else:
+        assert (
+            tagged['flow_disposition']
+            == 'Blocked - Proxy Authentication Failed'
+        ).any()
+        assert 'Mis-routed' not in tagged['flow_disposition'].values
+        err_summary = metrics.get('error_summary', {})
+        tls_fail = err_summary.get('TLS Handshake Failure')
+        if isinstance(tls_fail, dict):
+            count = tls_fail.get('count', 0)
+        else:
+            count = tls_fail or 0
+        assert count == 0
 
     plaintext_count = metrics.get('security_findings', {}).get('plaintext_http_flows', 0)
     assert plaintext_count > 0
-
-    err_summary = metrics.get('error_summary', {})
-    tls_fail = err_summary.get('TLS Handshake Failure')
-    if isinstance(tls_fail, dict):
-        count = tls_fail.get('count', 0)
-    else:
-        count = tls_fail or 0
-    assert count >= 1

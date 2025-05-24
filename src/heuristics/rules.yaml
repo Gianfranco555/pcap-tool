@@ -140,6 +140,12 @@ flow_disposition_rules:
       # This rule should be ordered after more specific RST rules.
     stop_processing: false # Could be client or server initiated mid-stream.
 
+  - name: "Proxy Authentication Failure (HTTP 407)"
+    output_value: "Blocked - Proxy Authentication Failed"
+    conditions:
+      - {field: "http_response_code", operator: "equals", value: 407}
+    stop_processing: true
+
 # ==============================================================================
 # Rule set for the 'traffic_type_guess' column
 # ==============================================================================
