@@ -45,9 +45,9 @@ def count_plaintext_http_flows(records: Iterable[Mapping[str, Any]]) -> int:
             src_port = _get_packet_field(pkt, "source_port") or _get_packet_field(pkt, "src_port")
             dst_port = _get_packet_field(pkt, "destination_port") or _get_packet_field(pkt, "dest_port")
             proto = str(
-                _get_packet_field(pkt, "protocol")
-                or _get_packet_field(pkt, "proto")
-                or ""
+
+                _get_packet_field(pkt, "protocol") or _get_packet_field(pkt, "proto") or ""
+
             ).upper()
             flows.add((src_ip, dst_ip, src_port, dst_port, proto))
     return len(flows)
