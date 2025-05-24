@@ -8,14 +8,14 @@ import pandas as pd
 def _is_plain_packet(pkt: Mapping[str, Any]) -> bool:
     """Return True if packet ``pkt`` is likely plaintext HTTP."""
     proto = str(pkt.get("protocol") or pkt.get("proto") or "").upper()
-    method = str(pkt.get("http_request_method") or pkt.get("http_method") or "").upper()
+    method = str(
+        pkt.get("http_request_method") or pkt.get("http_method") or ""
+    ).upper()
 
     if proto == "HTTP" and method == "CONNECT":
-        # HTTP CONNECT is treated as plaintext due to [REASON - e.g., lack of encryption]
         return True
 
     if proto == "HTTP":
-        # Assuming all HTTP traffic is plaintext for simplicity. Refine if needed.
         return True
 
     port = pkt.get("destination_port") or pkt.get("dest_port")
@@ -24,9 +24,8 @@ def _is_plain_packet(pkt: Mapping[str, Any]) -> bool:
     except (TypeError, ValueError):
         port_int = None
     if proto == "TCP" and port_int == 80:
-        # Check for HTTP on port 80, but exclude TLS/SSL
         http_method = method or str(pkt.get("http_request_method") or "").upper()
-        if http_method and 'TLS' not in str(pkt.get("protocol") or pkt.get("proto") or "").upper():
+        if http_method and "TLS" not in str(pkt.get("protocol") or pkt.get("proto") or "").upper():
             return True
     return False
 
@@ -46,7 +45,9 @@ def count_plaintext_http_flows(records: Iterable[Mapping[str, Any]]) -> int:
             src_port = _get_packet_field(pkt, "source_port") or _get_packet_field(pkt, "src_port")
             dst_port = _get_packet_field(pkt, "destination_port") or _get_packet_field(pkt, "dest_port")
             proto = str(
+
                 _get_packet_field(pkt, "protocol") or _get_packet_field(pkt, "proto") or ""
+
             ).upper()
             flows.add((src_ip, dst_ip, src_port, dst_port, proto))
     return len(flows)
