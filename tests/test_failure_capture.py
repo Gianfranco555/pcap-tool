@@ -13,8 +13,24 @@ from pcap_tool.analyze import ErrorSummarizer, SecurityAuditor
 
 @pytest.mark.slow
 def test_failure_capture_pipeline():
-    df = pd.read_csv(Path('tests/fixtures/Failure_Pcap.csv'))
-    records = [PcapRecord(**row) for row in df.to_dict(orient='records')]
+    df = pd.read_csv(Path("tests/fixtures/Failure_Pcap.csv"))
+
+    rename_map = {
+        "src_ip": "source_ip",
+        "dest_ip": "destination_ip",
+        "src_port": "source_port",
+        "dest_port": "destination_port",
+        "proto": "protocol",
+        "http_status": "http_response_code",
+        "http_method": "http_request_method",
+    }
+    df = df.rename(columns={k: v for k, v in rename_map.items() if k in df.columns})
+
+    field_set = set(PcapRecord.__dataclass_fields__.keys())
+    records = [
+        PcapRecord(**{k: row.get(k) for k in field_set})
+        for row in df.to_dict(orient="records")
+    ]
     stats = collect_stats(records)
 
     engine = HeuristicEngine('src/heuristics/rules.yaml')
