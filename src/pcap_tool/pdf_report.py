@@ -15,7 +15,7 @@ from .exceptions import ReportGenerationError
 from .metrics_builder import select_top_flows
 
 
-def _add_service_overview(elements: list, styles, overview: Dict[str, Any]) -> None:
+def _add_service_overview(elements: list, styles: Dict[str, Any], overview: Dict[str, Any]) -> None:
     """Append a bulleted service overview section."""
     try:  # pragma: no cover - optional dependency
         from reportlab.platypus import Paragraph, Spacer
