@@ -14,6 +14,14 @@ from pcap_tool.enrich.service_guesser import guess_service
 from pcap_tool.analyze import ErrorSummarizer, SecurityAuditor
 
 
+def _get_tls_failure_count(metrics_data: dict) -> int:
+    err_summary = metrics_data.get("error_summary", {})
+    tls_fail = err_summary.get("TLS Handshake Failure")
+    if isinstance(tls_fail, dict):
+        return tls_fail.get("count", 0)
+    return tls_fail or 0
+
+
 @pytest.mark.slow
 def test_failure_capture_pipeline():
     df = pd.read_csv(Path("tests/fixtures/Failure_Pcap.csv"))
@@ -61,26 +69,16 @@ def test_failure_capture_pipeline():
         ).any()
         # DNS/TLS mismatch detection may label flows as "Mis-routed"
         assert (tagged['flow_disposition'] == 'Mis-routed').any()
-        err_summary = metrics.get('error_summary', {})
-        tls_fail = err_summary.get('TLS Handshake Failure')
-        if isinstance(tls_fail, dict):
-            count = tls_fail.get('count', 0)
-        else:
-            count = tls_fail or 0
-        assert count >= 1
+        tls_count = _get_tls_failure_count(metrics)
+        assert tls_count >= 1
     else:
         assert (
             tagged['flow_disposition']
             == 'Blocked - Proxy Authentication Failed'
         ).any()
         assert 'Mis-routed' not in tagged['flow_disposition'].values
-        err_summary = metrics.get('error_summary', {})
-        tls_fail = err_summary.get('TLS Handshake Failure')
-        if isinstance(tls_fail, dict):
-            count = tls_fail.get('count', 0)
-        else:
-            count = tls_fail or 0
-        assert count == 0
+        tls_count = _get_tls_failure_count(metrics)
+        assert tls_count == 0
 
     plaintext_count = metrics.get('security_findings', {}).get('plaintext_http_flows', 0)
     assert plaintext_count > 0
