@@ -16,6 +16,7 @@ from .metrics.timeline_builder import TimelineBuilder
 from .enrich.service_guesser import guess_service
 from .analyze import PerformanceAnalyzer, ErrorSummarizer, SecurityAuditor
 from pcap_tool.heuristics.engine import HeuristicEngine
+from pcap_tool.heuristics.metrics import count_tls_versions
 
 if TYPE_CHECKING:  # pragma: no cover - imported for type hints only
     from .enrichment import Enricher
@@ -100,6 +101,7 @@ class MetricsBuilder:
         "protocols": {},
         "top_ports": {},
         "quic_vs_tls_packets": {},
+        "tls_version_counts": {},
         "top_talkers_by_bytes": [],
         "top_talkers_by_packets": [],
         "service_overview": {},
@@ -150,6 +152,7 @@ class MetricsBuilder:
             "protocols": {},
             "top_ports": {},
             "quic_vs_tls_packets": {},
+            "tls_version_counts": {},
             "top_talkers_by_bytes": [],
             "top_talkers_by_packets": [],
             "service_overview": {},
@@ -165,6 +168,23 @@ class MetricsBuilder:
         metrics["protocols"] = sc_summary.get("protocols", {})
         metrics["top_ports"] = sc_summary.get("top_ports", {})
         metrics["quic_vs_tls_packets"] = sc_summary.get("quic_vs_tls_packets", {})
+        if (
+            not packet_df_for_enrich_detail.empty
+            and "tls_effective_version" in packet_df_for_enrich_detail.columns
+        ):
+            # Extract only the column required for TLS version counting to avoid
+            # allocating full row dictionaries when the DataFrame has many
+            # columns. The generator yields minimal mappings accepted by
+            # ``count_tls_versions``.
+            column_values = packet_df_for_enrich_detail[
+                "tls_effective_version"
+            ].dropna()
+            records_for_count = (
+                {"tls_effective_version": val} for val in column_values
+            )
+            metrics["tls_version_counts"] = count_tls_versions(records_for_count)
+        else:
+            metrics["tls_version_counts"] = {}
 
         # Flow table summaries
         df_bytes, df_pkts = self.flow_table.get_summary_df()
