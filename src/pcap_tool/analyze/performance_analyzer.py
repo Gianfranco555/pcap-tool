@@ -9,6 +9,7 @@ import pandas as pd
 
 from ..models import PcapRecord
 from ..utils import safe_int_or_default
+from ..core.config import settings
 
 
 class PerformanceAnalyzer:
@@ -66,7 +67,7 @@ class PerformanceAnalyzer:
                 syn_ts = syn_times.get(rev_key)
                 if syn_ts is not None:
                     diff = getattr(row, "timestamp", 0.0) - syn_ts
-                    if 0 <= diff <= 3.0:
+                    if 0 <= diff <= settings.tcp_rtt_timeout:
                         rtts.append(diff * 1000.0)
                     del syn_times[rev_key]
 
