@@ -13,6 +13,7 @@ import pandas as pd
 from .chart_generator import protocol_pie_chart, top_ports_bar_chart
 from .exceptions import ReportGenerationError
 from .metrics_builder import select_top_flows
+from .core.config import settings
 
 
 def _add_service_overview(elements: list, styles: Dict[str, Any], overview: Dict[str, Any]) -> None:
@@ -157,7 +158,7 @@ def _build_elements(
         elements.append(Spacer(1, 12))
 
     if flows_df is not None and not flows_df.empty:
-        flows_df = select_top_flows(flows_df)
+        flows_df = select_top_flows(flows_df, settings.pdf_report_max_flows)
         elements.append(Paragraph("Top Flows", styles["Heading2"]))
 
         preferred_cols = [
@@ -174,7 +175,7 @@ def _build_elements(
         if not display_cols:
             display_cols = list(flows_df.columns[:8])
 
-        table_df = flows_df[display_cols].head(20).fillna("")
+        table_df = flows_df[display_cols].head(settings.pdf_report_max_flows).fillna("")
         spark_re = re.compile(r"sparkline_.*")
 
         header_map = {

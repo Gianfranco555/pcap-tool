@@ -17,6 +17,7 @@ from .enrich.service_guesser import guess_service
 from .analyze import PerformanceAnalyzer, ErrorSummarizer, SecurityAuditor
 from pcap_tool.heuristics.engine import HeuristicEngine
 from pcap_tool.heuristics.metrics import count_tls_versions
+from .core.config import settings
 
 if TYPE_CHECKING:  # pragma: no cover - imported for type hints only
     from .enrichment import Enricher
@@ -256,7 +257,7 @@ class MetricsBuilder:
 
         # Top flows based on diagnostic relevance
         metrics["top_flows"] = (
-            select_top_flows(tagged_flow_df).to_dict(orient="records")
+            select_top_flows(tagged_flow_df, settings.pdf_report_max_flows).to_dict(orient="records")
             if not tagged_flow_df.empty
             else []
         )

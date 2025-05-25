@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pcap_tool.logging import get_logger
+from ..core.config import settings
 import socket
 from functools import lru_cache
 from typing import Any, Callable, Optional
@@ -31,9 +32,9 @@ class Enricher:
 
     def __init__(
         self,
-        geoip_city_db_path: Optional[str] = None,
-        geoip_asn_db_path: Optional[str] = None,
-        geoip_country_db_path: Optional[str] = None,
+        geoip_city_db_path: Optional[str] = settings.geoip_city_db_path,
+        geoip_asn_db_path: Optional[str] = settings.geoip_asn_db_path,
+        geoip_country_db_path: Optional[str] = settings.geoip_country_db_path,
     ) -> None:
         """Initialize the Enricher.
 

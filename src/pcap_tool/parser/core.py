@@ -11,6 +11,7 @@ from typing import (
 )
 import logging
 from pcap_tool.logging import get_logger
+from ..core.config import settings
 import pandas as pd
 from pathlib import Path
 import ipaddress
@@ -1403,10 +1404,10 @@ def _process_slice(
 
 def iter_parsed_frames(
     file_like: Path | IO[bytes],
-    chunk_size: int = 10_000,
+    chunk_size: int = settings.chunk_size,
     on_progress: Callable[[int, Optional[int]], None] | None = None,
     max_packets: int | None = None,
-    workers: int | None = None,
+    workers: int | None = settings.max_workers,
     _slice_start: int = 0,
     _slice_size: int | None = None,
 ) -> Iterator[pd.DataFrame]:
@@ -1418,10 +1419,11 @@ def iter_parsed_frames(
     file_like:
         Path to the PCAP file or a binary file-like object.
     chunk_size:
-        Number of rows per yielded ``DataFrame``. The default value of
-        ``10_000`` is a general-purpose starting point. Increase the size
-        if sufficient memory is available for better performance, or
-        decrease it if memory is constrained.
+        Number of rows per yielded ``DataFrame``. The default value comes from
+        :class:`~pcap_tool.core.config.Settings` and can be adjusted via
+        environment variables. Increase the size if sufficient memory is
+        available for better performance, or decrease it if memory is
+        constrained.
     on_progress:
         Optional callback receiving the current processed packet count and
         an estimated total packet count.
@@ -1562,10 +1564,10 @@ def iter_parsed_frames(
 
 def parse_pcap_to_df(
     file_like: Path | IO[bytes],
-    chunk_size: int = 10_000,
+    chunk_size: int = settings.chunk_size,
     on_progress: Callable[[int, Optional[int]], None] | None = None,
     max_packets: int | None = None,
-    workers: int | None = None,
+    workers: int | None = settings.max_workers,
 ) -> pd.DataFrame:
 
     """Parse ``file_like`` and return a single concatenated ``DataFrame``.
@@ -1662,8 +1664,8 @@ def parse_pcap(
     file_like,
     *,
     output_uri: str | None = None,
-    workers: int | None = None,
-    chunk_size: int = 10_000,
+    workers: int | None = settings.max_workers,
+    chunk_size: int = settings.chunk_size,
     on_progress: Callable[[int, Optional[int]], None] | None = None,
 ) -> ParsedHandle:
     """Parse ``file_like`` and return a handle to the parsed flows."""
