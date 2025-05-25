@@ -556,15 +556,36 @@ class PySharkParser(BaseParser):
     ) -> Generator[PcapRecord, None, None]:
         """Yield :class:`PcapRecord` objects for ``file_path``."""
 
-        # The detailed parsing logic is implemented in ``_parse_with_pyshark``.
-        # This method delegates to that generator to preserve existing
-        # behaviour while exposing the class-based API.
-        yield from _parse_with_pyshark(
+        logger.info(f"Starting PCAP parsing with PyShark for: {file_path}")
+
+        cap = self._create_capture(
             file_path,
-            max_packets,
             start=start,
             slice_size=slice_size,
+            load_timeout=self.load_timeout,
         )
+
+        generated_records = 0
+        try:
+            for packet in cap:
+                if max_packets is not None and generated_records >= max_packets:
+                    logger.info(
+                        f"PySharkParser: Reached max_packets limit of {max_packets}."
+                    )
+                    break
+
+                try:
+                    record = self._packet_to_record(packet)
+                    yield record
+                    generated_records += 1
+                except Exception as exc:  # pragma: no cover - runtime protection
+                    logger.error("Error processing packet: %s", exc, exc_info=True)
+        finally:
+            if cap:
+                cap.close()
+            logger.info(
+                f"PySharkParser: Finished processing. Yielded {generated_records} records."
+            )
 
 
 # Backwards compatibility: old name with lowercase "s"
