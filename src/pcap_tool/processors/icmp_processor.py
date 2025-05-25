@@ -39,16 +39,13 @@ class ICMPProcessor(PacketProcessor):
 
     def process_packet(self, extractor: "PacketExtractor", record: PcapRecord) -> Dict[str, Any]:
         result: Dict[str, Any] = {}
-        icmp_layer = None
         layer_name = None
         if record.protocol == "ICMP" and hasattr(extractor.packet, "icmp"):
-            icmp_layer = extractor.packet.icmp
             layer_name = "icmp"
         elif record.protocol == "ICMPv6" and hasattr(extractor.packet, "icmpv6"):
-            icmp_layer = extractor.packet.icmpv6
             layer_name = "icmpv6"
 
-        if icmp_layer is not None:
+        if layer_name is not None:
             result["icmp_type"] = _safe_int(extractor.get(layer_name, "type", record.frame_number))
             result["icmp_code"] = _safe_int(extractor.get(layer_name, "code", record.frame_number))
             frag_needed_v4 = record.protocol == "ICMP" and result.get("icmp_type") == 3 and result.get("icmp_code") == 4
