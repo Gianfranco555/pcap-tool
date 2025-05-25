@@ -10,6 +10,7 @@ import pandas as pd
 from ..models import PcapRecord
 from ..utils import safe_int_or_default
 from ..core.config import settings
+from ..core.decorators import handle_analysis_errors, log_performance
 
 
 class PerformanceAnalyzer:
@@ -29,6 +30,8 @@ class PerformanceAnalyzer:
         # self.quic_initial_packets: Dict[str, float] = {}
 
     @staticmethod
+    @handle_analysis_errors
+    @log_performance
     def collect_rtt_samples(packets_df: pd.DataFrame) -> List[float]:
         """Return RTT samples in ms from SYN/SYN-ACK pairs in ``packets_df``."""
 
@@ -127,6 +130,8 @@ class PerformanceAnalyzer:
                     self.tls_alert_deltas_ms.append(delta)
                 self.tls_handshake_start[flow_id_str] = None
 
+    @handle_analysis_errors
+    @log_performance
     def get_summary(self) -> Dict[str, object]:
         """Return aggregated performance metrics."""
         if self.rtt_samples_ms:

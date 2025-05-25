@@ -18,6 +18,7 @@ from .analyze import PerformanceAnalyzer, ErrorSummarizer, SecurityAuditor
 from pcap_tool.heuristics.engine import HeuristicEngine
 from pcap_tool.heuristics.metrics import count_tls_versions
 from .core.config import settings
+from .core.decorators import handle_analysis_errors, log_performance
 
 if TYPE_CHECKING:  # pragma: no cover - imported for type hints only
     from .enrichment import Enricher
@@ -140,6 +141,8 @@ class MetricsBuilder:
         self.security_auditor = security_auditor
         self.heuristic_engine = heuristic_engine
 
+    @handle_analysis_errors
+    @log_performance
     def build_metrics(
         self,
         packet_df_for_enrich_detail: pd.DataFrame,

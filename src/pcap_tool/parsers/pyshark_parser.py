@@ -4,6 +4,7 @@ from typing import Any, Generator, Optional, TYPE_CHECKING
 
 from pcap_tool.logging import get_logger
 from ..models import PcapRecord
+
 from ..processors import (
     PacketProcessor,
     TCPProcessor,
@@ -15,6 +16,7 @@ from ..processors import (
 from functools import wraps
 from .base import BaseParser
 from .utils import _safe_int, _safe_str_to_bool
+from ..core.decorators import handle_parse_errors, log_performance
 
 logger = get_logger(__name__)
 
@@ -134,23 +136,6 @@ class PacketExtractor:
         return _get_pyshark_layer_attribute(layer_obj, attr, frame_number, is_flag)
 
 
-def handle_parse_errors(func):
-    """Decorator to log and re-raise errors during parsing."""
-
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            yield from func(*args, **kwargs)
-        except pyshark.capture.capture.TSharkCrashException as exc:  # pragma: no cover - runtime protection
-            logger.error("TShark crashed: %s", exc)
-            raise RuntimeError("TShark crashed during parsing") from exc
-        except Exception as exc:  # pragma: no cover - runtime protection
-            logger.error("Error parsing pcap: %s", exc, exc_info=True)
-            raise
-
-    return wrapper
-
-
 class PySharkParser(BaseParser):
     """Parser implementation using :mod:`pyshark` with helper methods."""
 
@@ -263,6 +248,7 @@ class PySharkParser(BaseParser):
 
 
     @handle_parse_errors
+    @log_performance
     def parse(
         self,
         file_path: str,
