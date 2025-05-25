@@ -6,16 +6,16 @@ from ..models import PcapRecord
 from .base import BaseParser
 from .utils import _safe_int
 from ..core.decorators import handle_parse_errors, log_performance
+from ..core.dependencies import container
 
 logger = get_logger(__name__)
 
-USE_PCAPKIT = False
-try:  # pragma: no cover - import check
-    import pcapkit
-    from pcapkit import extract as pcapkit_extract
+try:  # pragma: no cover - optional dependency check
+    pcapkit = container.get("pcapkit")
+    pcapkit_extract = pcapkit.extract
     USE_PCAPKIT = True
-except Exception:  # pragma: no cover - import check
-    pass
+except ImportError:
+    USE_PCAPKIT = False
 
 
 class PcapkitParser(BaseParser):
