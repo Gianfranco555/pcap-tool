@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
-from typing import Dict, List
+from typing import Dict, List, TypedDict, Union
 import pandas as pd
 from ...core.decorators import handle_analysis_errors, log_performance
+
+
+class ErrorDetail(TypedDict):
+    """Structure for a single error count and example flow IDs."""
+
+    count: int
+    sample_flow_ids: List[str]
+
+
+ErrorSummary = Dict[str, Union[ErrorDetail, Dict[str, ErrorDetail]]]
 
 
 class ErrorSummarizer:
@@ -12,17 +22,17 @@ class ErrorSummarizer:
 
     @handle_analysis_errors
     @log_performance
-    def summarize_errors(self, tagged_flow_df: pd.DataFrame) -> Dict[str, Dict]:
+    def summarize_errors(self, tagged_flow_df: pd.DataFrame) -> ErrorSummary:
         """Return counts and sample flow IDs for each error type."""
         if tagged_flow_df.empty or "flow_error_type" not in tagged_flow_df.columns:
             return {}
 
         df = tagged_flow_df.dropna(subset=["flow_error_type"]).copy()
-        result: Dict[str, Dict] = {}
+        result: ErrorSummary = {}
         for err_type, type_group in df.groupby("flow_error_type"):
             err_type_str = str(err_type)
             if "flow_error_details" in type_group.columns:
-                details_dict: Dict[str, Dict[str, object]] = {}
+                details_dict: Dict[str, ErrorDetail] = {}
                 for detail, detail_group in type_group.groupby("flow_error_details"):
                     detail_key = str(detail) if pd.notna(detail) else "other"
                     flow_series = detail_group.get(
@@ -55,7 +65,7 @@ class ErrorSummarizer:
 
     @handle_analysis_errors
     @log_performance
-    def get_total_error_count(self, error_summary: Dict[str, Dict]) -> int:
+    def get_total_error_count(self, error_summary: ErrorSummary) -> int:
         """Return the total number of errors from ``error_summary``."""
         total = 0
         for info in error_summary.values():
@@ -69,7 +79,7 @@ class ErrorSummarizer:
 
     @handle_analysis_errors
     @log_performance
-    def get_error_details_for_dataframe(self, error_summary: Dict[str, Dict]) -> List[Dict[str, object]]:
+    def get_error_details_for_dataframe(self, error_summary: ErrorSummary) -> List[Dict[str, object]]:
         """Convert ``error_summary`` to a list of dicts for DataFrame display."""
         rows: List[Dict[str, object]] = []
         for err_type, info in error_summary.items():
