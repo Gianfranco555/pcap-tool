@@ -19,7 +19,7 @@ import os
 from math import ceil
 from concurrent.futures import ProcessPoolExecutor
 
-from ..exceptions import CorruptPcapError
+from ..exceptions import CorruptPcapError, ParserNotAvailable
 from ..heuristics.errors import detect_packet_error
 from ..core.constants import (
     MAGIC_PCAP_LE,
@@ -35,9 +35,6 @@ from ..parsers.utils import _safe_int
 
 if TYPE_CHECKING:
     from pyshark.packet.packet import Packet
-
-class ParserNotAvailable(RuntimeError):
-    """Raised when no parser backend is available."""
 
 logger = get_logger(__name__)
 
@@ -148,13 +145,15 @@ def _get_record_generator(
     slice_size: Optional[int] = None,
 ) -> tuple[Optional[Generator[PcapRecord, None, None]], str]:
     """Return a generator yielding :class:`PcapRecord` objects."""
-    if not USE_PYSHARK and not USE_PCAPKIT:
+    available = ParserFactory.available_parsers()
+    if not available:
         err_msg = "Neither PyShark nor PCAPKit is installed or available. Please install at least one."
         logger.critical(err_msg)
-        raise RuntimeError(err_msg)
+        raise ParserNotAvailable(err_msg)
 
-    for parser in ParserFactory.get_parsers():
-        parser_name = parser.__class__.__name__
+    for parser_cls in available:
+        parser = parser_cls()
+        parser_name = parser_cls.__name__
         try:
             limit = slice_size if slice_size is not None else max_packets
             if slice_size is not None and max_packets is not None:
