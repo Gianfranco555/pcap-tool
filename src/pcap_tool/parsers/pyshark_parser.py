@@ -4,6 +4,7 @@ from typing import Any, Generator, Optional, TYPE_CHECKING
 
 from pcap_tool.logging import get_logger
 from ..models import PcapRecord
+from ..core.dependencies import container
 
 from ..processors import (
     PacketProcessor,
@@ -20,12 +21,12 @@ from ..core.decorators import handle_parse_errors, log_performance
 
 logger = get_logger(__name__)
 
-USE_PYSHARK = False
-try:  # pragma: no cover - import check
-    import pyshark  # type: ignore
+try:  # pragma: no cover - optional dependency check
+    pyshark = container.get("pyshark")  # type: ignore
     USE_PYSHARK = True
-except Exception:  # pragma: no cover - import check
-    pass
+except ImportError:
+    USE_PYSHARK = False
+    pyshark = None  # type: ignore
 
 if TYPE_CHECKING:  # pragma: no cover - hint for static analyzers
     from pyshark.packet.packet import Packet as PySharkPacket

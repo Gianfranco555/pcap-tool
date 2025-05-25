@@ -9,7 +9,12 @@ import time
 from typing import Optional
 from pathlib import Path
 
-import openai
+from .core.dependencies import container
+
+try:  # pragma: no cover - optional dependency check
+    openai = container.get("openai")  # type: ignore
+except ImportError:  # pragma: no cover - handle missing
+    openai = None  # type: ignore
 
 logger = get_logger(__name__)
 
@@ -21,8 +26,12 @@ class LLMSummarizerError(Exception):
 class LLMSummarizer:
     """Generate plain-English summaries of metrics via GPT."""
 
-    def __init__(self, client: Optional[openai.Client] = None, model: str = "gpt-4o") -> None:
+    def __init__(self, client: Optional[object] = None, model: str = "gpt-4o") -> None:
         """Initialize the summarizer with an optional OpenAI client."""
+        if openai is None:
+            raise LLMSummarizerError(
+                "The 'openai' package is required for LLMSummarizer."
+            )
         if client is None:
             api_key = os.environ.get("OPENAI_API_KEY")
             client = openai.Client(api_key=api_key)
