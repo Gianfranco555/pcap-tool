@@ -14,14 +14,14 @@ from .chart_generator import protocol_pie_chart, top_ports_bar_chart
 from .exceptions import ReportGenerationError
 from .metrics_builder import select_top_flows
 from .core.config import settings
+from .core.dependencies import container
 
 
 def _add_service_overview(elements: list, styles: Dict[str, Any], overview: Dict[str, Any]) -> None:
     """Append a bulleted service overview section."""
-    try:  # pragma: no cover - optional dependency
-        from reportlab.platypus import Paragraph, Spacer
-    except Exception:  # pragma: no cover - dependency may be missing
+    if not container.is_available("reportlab"):
         return
+    from reportlab.platypus import Paragraph, Spacer
 
     if not overview:
         return
@@ -38,10 +38,9 @@ def _add_service_overview(elements: list, styles: Dict[str, Any], overview: Dict
 
 def _add_error_summary(elements: list, styles, summary: Dict[str, Any]) -> None:
     """Append a bulleted error summary section."""
-    try:  # pragma: no cover - optional dependency
-        from reportlab.platypus import Paragraph, Spacer
-    except Exception:  # pragma: no cover - dependency may be missing
+    if not container.is_available("reportlab"):
         return
+    from reportlab.platypus import Paragraph, Spacer
 
     if not summary:
         return
@@ -90,6 +89,8 @@ def _build_elements(
     styles,
     summary_text: str | None = None,
 ) -> list:
+    if not container.is_available("reportlab"):
+        raise ImportError("ReportLab is required to build PDF elements")
     from reportlab.platypus import Paragraph, Spacer, Table, TableStyle, Image
     from reportlab.lib import colors
 
@@ -295,21 +296,18 @@ def generate_pdf_report(
     ImportError
         If the ReportLab library is not installed.
     """
-    try:
-        from reportlab.lib.pagesizes import letter
-        from reportlab.lib import colors
-        from reportlab.lib.styles import getSampleStyleSheet
-        from reportlab.platypus import (
-            SimpleDocTemplate,
-            Paragraph,
-            Spacer,
-            Table,
-            TableStyle,
-        )
-    except Exception as exc:  # pragma: no cover - dependency may be missing
-        raise ImportError(
-            "ReportLab is required to generate PDF reports"
-        ) from exc
+    if not container.is_available("reportlab"):
+        raise ImportError("ReportLab is required to generate PDF reports")
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.platypus import (
+        SimpleDocTemplate,
+        Paragraph,
+        Spacer,
+        Table,
+        TableStyle,
+    )
 
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter)

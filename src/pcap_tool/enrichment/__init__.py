@@ -4,25 +4,24 @@ from __future__ import annotations
 
 from pcap_tool.logging import get_logger
 from ..core.config import settings
+from ..core.dependencies import container
 import socket
 from functools import lru_cache
 from typing import Any, Callable, Optional
 
-try:  # pragma: no cover - optional dependency
-    import geoip2.database
-    import geoip2.errors
-except Exception:  # pragma: no cover - library may not be installed
-    geoip2 = None  # type: ignore
+geoip2 = None
+Reader = None  # type: ignore
 
-    Reader = None  # type: ignore
-
+if container.is_available("geoip2"):
+    geoip2 = container.get("geoip2")  # type: ignore
+    geoip2 = container.get("geoip2")  # type: ignore
+    Reader = geoip2.database.Reader  # type: ignore
+    AddressNotFoundError = geoip2.errors.AddressNotFoundError  # type: ignore
+else:
     class AddressNotFoundError(Exception):
         """Fallback error if geoip2 is unavailable."""
 
         pass
-else:  # pragma: no cover - library available
-    Reader = geoip2.database.Reader  # type: ignore
-    AddressNotFoundError = geoip2.errors.AddressNotFoundError  # type: ignore
 
 logger = get_logger(__name__)
 
