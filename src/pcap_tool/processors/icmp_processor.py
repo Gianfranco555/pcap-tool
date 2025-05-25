@@ -40,20 +40,23 @@ class ICMPProcessor(PacketProcessor):
     def process_packet(self, extractor: "PacketExtractor", record: PcapRecord) -> Dict[str, Any]:
         result: Dict[str, Any] = {}
         icmp_layer = None
+        layer_name = None
         if record.protocol == "ICMP" and hasattr(extractor.packet, "icmp"):
             icmp_layer = extractor.packet.icmp
+            layer_name = "icmp"
         elif record.protocol == "ICMPv6" and hasattr(extractor.packet, "icmpv6"):
             icmp_layer = extractor.packet.icmpv6
+            layer_name = "icmpv6"
 
-        if icmp_layer is not None:
-            result["icmp_type"] = _safe_int(getattr(icmp_layer, "type", None))
-            result["icmp_code"] = _safe_int(getattr(icmp_layer, "code", None))
+        if icmp_layer is not None and layer_name is not None:
+            result["icmp_type"] = _safe_int(extractor.get(layer_name, "type", record.frame_number))
+            result["icmp_code"] = _safe_int(extractor.get(layer_name, "code", record.frame_number))
             frag_needed_v4 = record.protocol == "ICMP" and result.get("icmp_type") == 3 and result.get("icmp_code") == 4
             pkt_too_big_v6 = record.protocol == "ICMPv6" and result.get("icmp_type") == 2 and result.get("icmp_code") == 0
             if frag_needed_v4 or pkt_too_big_v6:
-                mtu_str = getattr(icmp_layer, "mtu", None)
+                mtu_str = extractor.get(layer_name, "mtu", record.frame_number)
                 if mtu_str is None and frag_needed_v4:
-                    mtu_str = getattr(icmp_layer, "nexthopmtu", None)
+                    mtu_str = extractor.get(layer_name, "nexthopmtu", record.frame_number)
                 if mtu_str is not None:
                     result["icmp_fragmentation_needed_original_mtu"] = _safe_int(mtu_str)
 

@@ -41,8 +41,6 @@ def handle_parse_errors(func):
             return _wrap_generator(result, PcapParsingError, func.__name__)
         return result
 
-    return wrapper
-
 
 def handle_analysis_errors(func):
     """Wrap analysis methods to raise :class:`AnalysisError` on failure."""
@@ -72,7 +70,6 @@ def log_performance(func):
         result = func(*args, **kwargs)
         if isinstance(result, types.GeneratorType):
             def generator():
-                nonlocal start
                 for item in result:
                     yield item
                 duration = time.perf_counter() - start
@@ -83,4 +80,3 @@ def log_performance(func):
         return result
 
     return wrapper
-
