@@ -23,6 +23,20 @@ from collections import defaultdict, deque
 
 from ..exceptions import CorruptPcapError
 from ..heuristics.errors import detect_packet_error
+from ..core.constants import (
+    MAGIC_PCAP_LE,
+    MAGIC_PCAP_BE,
+    MAGIC_PCAPNG,
+    TLS_HANDSHAKE_TYPE_MAP,
+    TLS_VERSION_MAP,
+    TLS_ALERT_LEVEL_MAP,
+    TLS_ALERT_DESCRIPTION_MAP,
+    DNS_QUERY_TYPE_MAP,
+    DNS_RCODE_MAP,
+    DHCP_MESSAGE_TYPE_MAP,
+    ZSCALER_EXAMPLE_IP_RANGES,
+    ZPA_SYNTHETIC_IP_RANGE,
+)
 
 from ..models import PcapRecord, ParsedHandle
 
@@ -56,11 +70,7 @@ except ImportError:
 if not _USE_PYSHARK and not _USE_PCAPKIT:
     logger.error("Neither PyShark nor PCAPKit is available. PCAP parsing will not function.")
 
-# --- PCAP validation constants ---
-_MAGIC_PCAP_LE = b"\xd4\xc3\xb2\xa1"
-_MAGIC_PCAP_BE = b"\xa1\xb2\xc3\xd4"
-_MAGIC_PCAPNG = b"\x0a\x0d\x0d\x0a"
-
+# --- PCAP validation constants are imported from pcap_tool.core.constants ---
 
 def validate_pcap_file(filepath: str) -> bool:
     """Return ``True`` if ``filepath`` appears to be a valid PCAP/PCAPNG file."""
@@ -76,26 +86,13 @@ def validate_pcap_file(filepath: str) -> bool:
         logger.warning("Failed to read file %s: %s", filepath, exc)
         return False
 
-    if magic in (_MAGIC_PCAP_LE, _MAGIC_PCAP_BE, _MAGIC_PCAPNG):
+    if magic in (MAGIC_PCAP_LE, MAGIC_PCAP_BE, MAGIC_PCAPNG):
         return True
 
     logger.warning("Invalid PCAP magic number %s for %s", magic.hex(), filepath)
     return False
 
-# --- Helper Dictionaries (TLS, DNS, DHCP from previous chunks) ---
-TLS_HANDSHAKE_TYPE_MAP = { '0': "HelloRequest", '1': "ClientHello", '2': "ServerHello", '4': "NewSessionTicket", '5': "EndOfEarlyData", '8': "EncryptedExtensions", '11': "Certificate", '12': "ServerKeyExchange", '13': "CertificateRequest", '14': "ServerHelloDone", '15': "CertificateVerify", '16': "ClientKeyExchange", '20': "Finished", '24': "CertificateStatus", '25': "KeyUpdate",}
-TLS_VERSION_MAP = {"0x0300": "SSL 3.0", "0x0301": "TLS 1.0", "0x0302": "TLS 1.1", "0x0303": "TLS 1.2", "0x0304": "TLS 1.3",}
-TLS_ALERT_LEVEL_MAP = {'1': "warning", '2': "fatal",}
-TLS_ALERT_DESCRIPTION_MAP = {'0': "close_notify", '10': "unexpected_message", '20': "bad_record_mac", '21': "decryption_failed_RESERVED", '22': "record_overflow", '30': "decompression_failure", '40': "handshake_failure", '41': "no_certificate_RESERVED", '42': "bad_certificate", '43': "unsupported_certificate", '44': "certificate_revoked", '45': "certificate_expired", '46': "certificate_unknown", '47': "illegal_parameter", '48': "unknown_ca", '49': "access_denied", '50': "decode_error", '51': "decrypt_error", '60': "export_restriction_RESERVED", '70': "protocol_version", '71': "insufficient_security", '80': "internal_error", '86': "inappropriate_fallback", '90': "user_canceled", '100': "no_renegotiation_RESERVED", '110': "missing_extension", '111': "unsupported_extension", '112': "unrecognized_name", '113': "bad_certificate_status_response", '114': "unknown_psk_identity", '115': "certificate_required", '116': "no_application_protocol",}
-DNS_QUERY_TYPE_MAP = {'1': "A", '2': "NS", '5': "CNAME", '6': "SOA", '12': "PTR", '15': "MX", '16': "TXT", '28': "AAAA", '33': "SRV", '43': "DS", '46': "RRSIG", '47': "NSEC", '48': "DNSKEY", '255': "ANY", '257': "CAA",}
-DNS_RCODE_MAP = {'0': "NOERROR", '1': "FORMERR", '2': "SERVFAIL", '3': "NXDOMAIN", '4': "NOTIMP", '5': "REFUSED",}
-DHCP_MESSAGE_TYPE_MAP = {'1': "Discover", '2': "Offer", '3': "Request", '4': "Decline", '5': "Ack", '6': "Nak", '7': "Release", '8': "Inform",}
-
-ZSCALER_EXAMPLE_IP_RANGES = [
-    ipaddress.ip_network("104.129.192.0/20"),
-    ipaddress.ip_network("165.225.0.0/17"),
-]
-ZPA_SYNTHETIC_IP_RANGE = ipaddress.ip_network("100.64.0.0/10")
+# --- Helper dictionaries are imported from pcap_tool.core.constants ---
 
 # --- Lightweight TCP heuristic state ---
 _TCP_FLOW_HISTORY: dict[tuple[str, int, str, int], deque] = defaultdict(deque)
@@ -125,7 +122,8 @@ def _safe_int(value: Any) -> Optional[int]:
         exception.
     """
     try:
-        return int(str(value).replace(",", ""))
+        cleaned = str(value).replace(",", "")
+        return int(cleaned, 0)
     except (TypeError, ValueError):
         return None
 
@@ -720,15 +718,21 @@ def _parse_with_pyshark(
                     tls_layer = packet.tls
                     raw_rec_ver = _get_pyshark_layer_attribute(tls_layer, 'record_version', frame_number)
                     if raw_rec_ver:
-                        tls_record_version_str = TLS_VERSION_MAP.get(str(raw_rec_ver).lower(), str(raw_rec_ver))
+                        tls_record_version_str = TLS_VERSION_MAP.get(
+                            _safe_int(raw_rec_ver), str(raw_rec_ver)
+                        )
 
                     hs_type_val = _get_pyshark_layer_attribute(tls_layer, 'handshake_type', frame_number)
                     if hs_type_val is not None:
-                        tls_handshake_type_str = TLS_HANDSHAKE_TYPE_MAP.get(str(hs_type_val), str(hs_type_val))
+                        tls_handshake_type_str = TLS_HANDSHAKE_TYPE_MAP.get(
+                            _safe_int(hs_type_val), str(hs_type_val)
+                        )
 
                     hs_ver_val = _get_pyshark_layer_attribute(tls_layer, 'handshake_version', frame_number)
                     if hs_ver_val is not None:
-                        tls_handshake_version_str = TLS_VERSION_MAP.get(str(hs_ver_val).lower(), str(hs_ver_val))
+                        tls_handshake_version_str = TLS_VERSION_MAP.get(
+                            _safe_int(hs_ver_val), str(hs_ver_val)
+                        )
 
                     # Supported or selected version fields vary across tshark versions
                     supp_ver_val = None
@@ -746,7 +750,9 @@ def _parse_with_pyshark(
                         else:
                             ver_token = supp_ver_val
                         if ver_token is not None:
-                            tls_handshake_version_str = TLS_VERSION_MAP.get(str(ver_token).lower(), str(ver_token))
+                            tls_handshake_version_str = TLS_VERSION_MAP.get(
+                                _safe_int(ver_token), str(ver_token)
+                            )
 
                     if tls_handshake_type_str == "ClientHello" and hasattr(tls_layer, 'handshake_ciphersuites'):
                         raw_suites = getattr(tls_layer, 'handshake_ciphersuites')
@@ -772,19 +778,21 @@ def _parse_with_pyshark(
                     if hasattr(tls_layer, 'record_content_type') and str(_get_pyshark_layer_attribute(tls_layer, 'record_content_type', frame_number)) == '21': # Alert
                         alert_level_val = _get_pyshark_layer_attribute(tls_layer, 'alert_message_level', frame_number)
                         if alert_level_val:
-                            tls_alert_level_str = TLS_ALERT_LEVEL_MAP.get(str(alert_level_val), str(alert_level_val))
+                            tls_alert_level_str = TLS_ALERT_LEVEL_MAP.get(
+                                _safe_int(alert_level_val), str(alert_level_val)
+                            )
 
                         # Try 'alert_message_description' first as it's more direct from newer tshark
                         alert_desc_val = _get_pyshark_layer_attribute(tls_layer, 'alert_message_description', frame_number)
                         if alert_desc_val:
                             tls_alert_description_str = TLS_ALERT_DESCRIPTION_MAP.get(
-                                str(alert_desc_val), str(alert_desc_val)
+                                _safe_int(alert_desc_val), str(alert_desc_val)
                             )
                         else:  # Fallback to 'alert_message' if description not found
                             alert_msg_val = _get_pyshark_layer_attribute(tls_layer, 'alert_message', frame_number)
                             if alert_msg_val:
                                 tls_alert_description_str = TLS_ALERT_DESCRIPTION_MAP.get(
-                                    str(alert_msg_val), str(alert_msg_val)
+                                    _safe_int(alert_msg_val), str(alert_msg_val)
                                 )  # Use same map
                             else:
                                 tls_alert_description_str = "Unknown Alert"
@@ -795,11 +803,17 @@ def _parse_with_pyshark(
                     dns_layer = packet.dns
                     dns_query_name_str = _get_pyshark_layer_attribute(dns_layer, 'qry_name', frame_number)
                     qry_type_val = _get_pyshark_layer_attribute(dns_layer, 'qry_type', frame_number)
-                    if qry_type_val: dns_query_type_str = DNS_QUERY_TYPE_MAP.get(str(qry_type_val), str(qry_type_val))
+                    if qry_type_val:
+                        dns_query_type_str = DNS_QUERY_TYPE_MAP.get(
+                            _safe_int(qry_type_val), str(qry_type_val)
+                        )
 
                     if _get_pyshark_layer_attribute(dns_layer, 'flags_response', frame_number, is_flag=True): # Check if it's a response
                         rcode_val = _get_pyshark_layer_attribute(dns_layer, 'flags_rcode', frame_number)
-                        if rcode_val: dns_response_code_str = DNS_RCODE_MAP.get(str(rcode_val), str(rcode_val))
+                        if rcode_val:
+                            dns_response_code_str = DNS_RCODE_MAP.get(
+                                _safe_int(rcode_val), str(rcode_val)
+                            )
 
                         current_response_addrs = []
                         # Handling for 'a' and 'aaaa' which can be single or list of Field objects
@@ -876,7 +890,10 @@ def _parse_with_pyshark(
 
                 if dhcp_layer_source:
                     msg_type_val = _get_pyshark_layer_attribute(dhcp_layer_source, 'option_dhcp_message_type', frame_number)
-                    if msg_type_val: dhcp_message_type_str = DHCP_MESSAGE_TYPE_MAP.get(str(msg_type_val), str(msg_type_val))
+                    if msg_type_val:
+                        dhcp_message_type_str = DHCP_MESSAGE_TYPE_MAP.get(
+                            _safe_int(msg_type_val), str(msg_type_val)
+                        )
 
 
                 if protocol_l4 == "GRE" and hasattr(packet, 'gre'):
