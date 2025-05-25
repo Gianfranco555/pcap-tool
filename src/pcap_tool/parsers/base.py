@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Generator, Optional
 
-from ..models import PcapRecord
+from ..core.models import PcapRecord
 
 
 class BaseParser(ABC):

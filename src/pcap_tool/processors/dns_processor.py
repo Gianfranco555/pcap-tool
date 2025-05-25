@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Any, Optional, TYPE_CHECKING
 
-from ..models import PcapRecord
+from ..core.models import PcapRecord
 from ..parsers.utils import _safe_int
 from . import PacketProcessor
 

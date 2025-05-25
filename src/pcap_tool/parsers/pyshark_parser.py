@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Generator, Optional, TYPE_CHECKING
 
 from pcap_tool.logging import get_logger
-from ..models import PcapRecord
+from ..core.models import PcapRecord
 from ..core.dependencies import container
 
 from ..processors import (

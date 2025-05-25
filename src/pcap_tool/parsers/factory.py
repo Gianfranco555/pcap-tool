@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import List, Type, Optional
 
 from pcap_tool.logging import get_logger
-from ..exceptions import ParserNotAvailable
+from ..core.exceptions import ParserNotAvailable
 from .base import BaseParser
 from .pyshark_parser import PysharkParser
 from .pcapkit_parser import PcapkitParser

@@ -1,5 +1,3 @@
-from .performance_analyzer import PerformanceAnalyzer
-from .error_summarizer import ErrorSummarizer
-from .security_auditor import SecurityAuditor
+from ..analysis import PerformanceAnalyzer, ErrorSummarizer, SecurityAuditor
 
 __all__ = ["PerformanceAnalyzer", "ErrorSummarizer", "SecurityAuditor"]

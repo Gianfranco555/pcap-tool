@@ -4,7 +4,7 @@ from .core import (
     iter_parsed_frames,
     validate_pcap_file,
 )
-from ..exceptions import ParserNotAvailable
+from ..core.exceptions import ParserNotAvailable
 from ..parsers.utils import _safe_int
 
 __all__ = [

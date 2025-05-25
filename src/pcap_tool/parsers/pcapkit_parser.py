@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Generator, Optional
 
 from pcap_tool.logging import get_logger
-from ..models import PcapRecord
+from ..core.models import PcapRecord
 from .base import BaseParser
 from .utils import _safe_int
 from ..core.decorators import handle_parse_errors, log_performance

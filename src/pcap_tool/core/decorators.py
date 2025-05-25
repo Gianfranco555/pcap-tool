@@ -7,7 +7,7 @@ import types
 from functools import wraps
 
 from ..logging import get_logger
-from ..exceptions import PcapParsingError, AnalysisError, PcapToolError
+from ..core.exceptions import PcapParsingError, AnalysisError, PcapToolError
 
 
 logger = get_logger(__name__)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol, Any, TYPE_CHECKING, Dict
 
-from ..models import PcapRecord
+from ..core.models import PcapRecord
 
 if TYPE_CHECKING:  # pragma: no cover - type hints only
     from ..parsers.pyshark_parser import PacketExtractor
