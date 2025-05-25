@@ -68,19 +68,31 @@ def log_performance(func):
 
     @wraps(func)
     def wrapper(*args, **kwargs):
-        start = time.perf_counter()
-        result = func(*args, **kwargs)
+        start_time = time.perf_counter()
+        try:
+            result = func(*args, **kwargs)
+        except Exception:  # pragma: no cover - runtime protection
+            duration = time.perf_counter() - start_time
+            logger.info("%s call failed after %.3f seconds", func.__name__, duration)
+            raise
+
         if isinstance(result, types.GeneratorType):
-            def generator():
-                nonlocal start
-                for item in result:
-                    yield item
-                duration = time.perf_counter() - start
-                logger.info("%s executed in %.3f seconds", func.__name__, duration)
-            return generator()
-        duration = time.perf_counter() - start
+            def generator_wrapper():
+                try:
+                    for item in result:
+                        yield item
+                finally:
+                    duration = time.perf_counter() - start_time
+                    logger.info(
+                        "%s (generator) iteration finished in %.3f seconds (total from initial call)",
+                        func.__name__,
+                        duration,
+                    )
+
+            return generator_wrapper()
+
+        duration = time.perf_counter() - start_time
         logger.info("%s executed in %.3f seconds", func.__name__, duration)
         return result
 
     return wrapper
-
