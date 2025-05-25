@@ -10,6 +10,7 @@ from pcap_tool.exceptions import (
     RuleLogicError,
     ReportGenerationError,
     AISummaryError,
+    AnalysisError,
 )
 
 
@@ -24,6 +25,7 @@ def test_exceptions_can_be_caught():
         RuleLogicError,
         ReportGenerationError,
         AISummaryError,
+        AnalysisError,
     ]:
         with pytest.raises(PcapToolError):
             raise exc_cls()

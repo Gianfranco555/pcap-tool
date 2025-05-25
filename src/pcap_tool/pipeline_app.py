@@ -22,6 +22,7 @@ from .pipeline_helpers import (
     build_metrics,
     generate_reports,
 )
+from .core.decorators import handle_analysis_errors, log_performance
 
 
 def _derive_flow_id(rec: PcapRecord) -> Tuple[str, str, int, int, str]:
@@ -56,6 +57,8 @@ def _flow_cache_key(record: PcapRecord) -> str:
     return f"UNKNOWN_FLOW_{record.frame_number}"
 
 
+@handle_analysis_errors
+@log_performance
 def run_analysis(
     pcap_path: Path,
     rules_path: Path,
