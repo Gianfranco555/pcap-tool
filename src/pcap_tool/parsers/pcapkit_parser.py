@@ -237,5 +237,3 @@ def _parse_with_pcapkit(file_path: str, max_packets: Optional[int]) -> Generator
         logger.info(
             f"PCAPKit: Finished processing. Scanned {packet_count} packets, yielded {generated_records} records."
         )
-
-
