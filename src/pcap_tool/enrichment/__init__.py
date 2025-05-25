@@ -14,11 +14,9 @@ Reader = None  # type: ignore
 
 if container.is_available("geoip2"):
     geoip2 = container.get("geoip2")  # type: ignore
-    import importlib
-    database_mod = importlib.import_module("geoip2.database")
-    errors_mod = importlib.import_module("geoip2.errors")
-    Reader = database_mod.Reader  # type: ignore
-    AddressNotFoundError = errors_mod.AddressNotFoundError  # type: ignore
+    geoip2 = container.get("geoip2")  # type: ignore
+    Reader = geoip2.database.Reader  # type: ignore
+    AddressNotFoundError = geoip2.errors.AddressNotFoundError  # type: ignore
 else:
     class AddressNotFoundError(Exception):
         """Fallback error if geoip2 is unavailable."""
