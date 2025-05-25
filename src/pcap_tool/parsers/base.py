@@ -24,4 +24,3 @@ class BaseParser(ABC):
         slice_size: Optional[int] = None,
     ) -> Generator[PcapRecord, None, None]:
         """Yield :class:`PcapRecord` objects for ``file_path``."""
-
