@@ -8,7 +8,7 @@ from ...utils import coalesce
 from ...core.decorators import handle_analysis_errors, log_performance
 
 if TYPE_CHECKING:  # pragma: no cover - for type hints only
-    from ..enrichment import Enricher
+from ...enrichment import Enricher
 
 
 class SecurityAuditor:
