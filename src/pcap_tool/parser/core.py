@@ -19,7 +19,7 @@ import os
 from math import ceil
 from concurrent.futures import ProcessPoolExecutor
 
-from ..exceptions import CorruptPcapError, ParserNotAvailable, PcapParsingError
+from ..core.exceptions import CorruptPcapError, ParserNotAvailable, PcapParsingError
 from ..core.decorators import handle_parse_errors, log_performance
 from ..heuristics.errors import detect_packet_error
 from ..core.constants import (
@@ -28,7 +28,7 @@ from ..core.constants import (
     MAGIC_PCAPNG,
 )
 
-from ..models import PcapRecord, ParsedHandle
+from ..core.models import PcapRecord, ParsedHandle
 from ..parsers.factory import ParserFactory
 from ..parsers.pyshark_parser import USE_PYSHARK
 from ..parsers.pcapkit_parser import USE_PCAPKIT

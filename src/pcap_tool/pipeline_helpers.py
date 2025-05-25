@@ -9,7 +9,7 @@ from typing import Any, Callable, Dict, List
 import pandas as pd
 
 from .parser import iter_parsed_frames
-from .models import PcapRecord
+from .core.models import PcapRecord
 from .metrics.stats_collector import StatsCollector
 from .metrics.flow_table import FlowTable
 from .metrics.timeline_builder import TimelineBuilder

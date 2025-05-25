@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Callable, List, Tuple
 
 import pandas as pd
-from .models import PcapRecord
+from .core.models import PcapRecord
 from .enrichment import Enricher
 from .enrich import service_guesser
 from .analyze import ErrorSummarizer, SecurityAuditor

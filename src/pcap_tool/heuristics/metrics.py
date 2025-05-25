@@ -6,7 +6,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Iterable, Mapping, Dict, Any
 
-from ..models import PcapRecord
+from ..core.models import PcapRecord
 
 
 def count_tls_versions(records: Iterable[Any]) -> Dict[str, int]:

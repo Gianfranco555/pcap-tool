@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict, deque
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
-from ..models import PcapRecord
+from ..core.models import PcapRecord
 from ..parsers.utils import _safe_int
 from . import PacketProcessor
 
