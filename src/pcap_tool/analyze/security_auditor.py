@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Dict, List, TYPE_CHECKING
 import pandas as pd
 from ..utils import coalesce
+from ..core.decorators import handle_analysis_errors, log_performance
 
 if TYPE_CHECKING:  # pragma: no cover - for type hints only
     from ..enrichment import Enricher
@@ -18,6 +19,8 @@ class SecurityAuditor:
     def __init__(self, enricher: Enricher) -> None:
         self.enricher = enricher
 
+    @handle_analysis_errors
+    @log_performance
     def audit_flows(
         self, tagged_flow_df: pd.DataFrame, unique_external_ips: List[str]
     ) -> Dict[str, object]:
@@ -88,6 +91,8 @@ class SecurityAuditor:
         result["connections_to_unusual_countries"] = unusual_connections
         return result
 
+    @handle_analysis_errors
+    @log_performance
     def get_total_security_issue_count(self, security_findings: Dict[str, object]) -> int:
         """Return the total number of security issues in ``security_findings``."""
         count = 0

@@ -5,6 +5,7 @@ from pcap_tool.logging import get_logger
 from ..models import PcapRecord
 from .base import BaseParser
 from .utils import _safe_int
+from ..core.decorators import handle_parse_errors, log_performance
 
 logger = get_logger(__name__)
 
@@ -24,6 +25,8 @@ class PcapkitParser(BaseParser):
     def validate(cls) -> bool:  # pragma: no cover - simple availability check
         return USE_PCAPKIT
 
+    @handle_parse_errors
+    @log_performance
     def parse(
         self,
         file_path: str,
@@ -35,6 +38,8 @@ class PcapkitParser(BaseParser):
         return _parse_with_pcapkit(file_path, max_packets)
 
 
+@handle_parse_errors
+@log_performance
 def _parse_with_pcapkit(file_path: str, max_packets: Optional[int]) -> Generator[PcapRecord, None, None]:
     logger.info(f"Attempting to parse with PCAPKit (fallback): {file_path}")
     logger.warning(

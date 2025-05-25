@@ -20,6 +20,7 @@ from math import ceil
 from concurrent.futures import ProcessPoolExecutor
 
 from ..exceptions import CorruptPcapError, ParserNotAvailable
+from ..core.decorators import handle_parse_errors, log_performance
 from ..heuristics.errors import detect_packet_error
 from ..core.constants import (
     MAGIC_PCAP_LE,
@@ -194,6 +195,8 @@ def _process_slice(
     return first, dfs
 
 
+@handle_parse_errors
+@log_performance
 def iter_parsed_frames(
     file_like: Path | IO[bytes],
     chunk_size: int = settings.chunk_size,
@@ -354,6 +357,8 @@ def iter_parsed_frames(
         yield pd.DataFrame(columns=cols)
 
 
+@handle_parse_errors
+@log_performance
 def parse_pcap_to_df(
     file_like: Path | IO[bytes],
     chunk_size: int = settings.chunk_size,
@@ -397,6 +402,8 @@ def parse_pcap_to_df(
 
 
 
+@handle_parse_errors
+@log_performance
 def _parse_to_duckdb(
     file_like: Path | IO[bytes],
     db_path: str,
@@ -425,6 +432,8 @@ def _parse_to_duckdb(
     return ParsedHandle("duckdb", db_path)
 
 
+@handle_parse_errors
+@log_performance
 def _parse_to_arrow(
     file_like: Path | IO[bytes],
     out_dir: str,
@@ -452,6 +461,8 @@ def _parse_to_arrow(
     return ParsedHandle("arrow", str(out_path))
 
 
+@handle_parse_errors
+@log_performance
 def parse_pcap(
     file_like,
     *,
@@ -492,7 +503,11 @@ def parse_pcap(
             workers=workers,
         )
 
-    raise ValueError("Unsupported output_uri scheme")
+    raise PcapParsingError(
+        "Unsupported output_uri scheme",
+        context=str(output_uri),
+        suggestion="Use 'duckdb://' or 'arrow://' URI schemes or omit output_uri for memory DataFrame.",
+    )
 
 if __name__ == '__main__':
     logging.basicConfig(

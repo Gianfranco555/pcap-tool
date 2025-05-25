@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from typing import Dict, List
 import pandas as pd
+from ..core.decorators import handle_analysis_errors, log_performance
 
 
 class ErrorSummarizer:
     """Aggregate flow error tags from :class:`HeuristicEngine`."""
 
+    @handle_analysis_errors
+    @log_performance
     def summarize_errors(self, tagged_flow_df: pd.DataFrame) -> Dict[str, Dict]:
         """Return counts and sample flow IDs for each error type."""
         if tagged_flow_df.empty or "flow_error_type" not in tagged_flow_df.columns:
@@ -50,6 +53,8 @@ class ErrorSummarizer:
                 }
         return result
 
+    @handle_analysis_errors
+    @log_performance
     def get_total_error_count(self, error_summary: Dict[str, Dict]) -> int:
         """Return the total number of errors from ``error_summary``."""
         total = 0
@@ -62,6 +67,8 @@ class ErrorSummarizer:
                         total += int(detail.get("count", 0))
         return total
 
+    @handle_analysis_errors
+    @log_performance
     def get_error_details_for_dataframe(self, error_summary: Dict[str, Dict]) -> List[Dict[str, object]]:
         """Convert ``error_summary`` to a list of dicts for DataFrame display."""
         rows: List[Dict[str, object]] = []

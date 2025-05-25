@@ -15,6 +15,7 @@ from .metrics.flow_table import FlowTable
 from .metrics.timeline_builder import TimelineBuilder
 from .analyze import PerformanceAnalyzer
 from .utils import safe_int
+from .core.decorators import handle_analysis_errors, log_performance
 
 INT_COLS: List[str] = [
     "source_port",
@@ -81,6 +82,8 @@ def _clean_int_columns(df: pd.DataFrame) -> None:
             df[col] = safe_int(df[col], FILL_VALUES.get(col, 0))
 
 
+@handle_analysis_errors
+@log_performance
 def load_packets(
     pcap_path: Path,
     on_progress: Callable[[int, int | None], None] | None = None,
@@ -106,6 +109,8 @@ def load_packets(
     return records
 
 
+@handle_analysis_errors
+@log_performance
 def collect_stats(records: List[PcapRecord]) -> dict[str, Any]:
     """Return packet dataframe and metric collectors for ``records``."""
     from .pipeline_app import _derive_flow_id, _flow_cache_key
@@ -137,6 +142,8 @@ def collect_stats(records: List[PcapRecord]) -> dict[str, Any]:
     }
 
 
+@handle_analysis_errors
+@log_performance
 def build_metrics(df: pd.DataFrame, heuristics_rules: Path) -> pd.DataFrame:
     """Tag ``df`` flows using the provided heuristic rules."""
     from pcap_tool.heuristics.engine import HeuristicEngine
@@ -170,6 +177,8 @@ def build_metrics(df: pd.DataFrame, heuristics_rules: Path) -> pd.DataFrame:
     return engine.tag_flows(df)
 
 
+@handle_analysis_errors
+@log_performance
 def generate_reports(metrics: dict, flows_df: pd.DataFrame, summary_text: str | None = None) -> bytes:
     """Return PDF bytes for the provided metrics."""
     from .pdf_report import generate_pdf_report
