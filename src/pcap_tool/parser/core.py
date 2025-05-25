@@ -19,7 +19,7 @@ import os
 from math import ceil
 from concurrent.futures import ProcessPoolExecutor
 
-from ..exceptions import CorruptPcapError, ParserNotAvailable
+from ..exceptions import CorruptPcapError, ParserNotAvailable, PcapParsingError
 from ..core.decorators import handle_parse_errors, log_performance
 from ..heuristics.errors import detect_packet_error
 from ..core.constants import (

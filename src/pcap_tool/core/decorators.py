@@ -72,7 +72,6 @@ def log_performance(func):
         result = func(*args, **kwargs)
         if isinstance(result, types.GeneratorType):
             def generator():
-                nonlocal start
                 for item in result:
                     yield item
                 duration = time.perf_counter() - start
@@ -83,4 +82,3 @@ def log_performance(func):
         return result
 
     return wrapper
-
