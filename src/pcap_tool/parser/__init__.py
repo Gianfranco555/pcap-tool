@@ -3,8 +3,8 @@ from .core import (
     parse_pcap_to_df,
     iter_parsed_frames,
     validate_pcap_file,
-    ParserNotAvailable,
 )
+from ..exceptions import ParserNotAvailable
 from ..parsers.utils import _safe_int
 
 __all__ = [

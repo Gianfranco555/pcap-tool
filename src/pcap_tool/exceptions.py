@@ -26,3 +26,7 @@ class ReportGenerationError(PcapToolError):
 
 class AISummaryError(PcapToolError):
     """Raised when AI summary generation fails."""
+
+
+class ParserNotAvailable(PcapToolError):
+    """Raised when no parser backend is available."""
