@@ -20,7 +20,7 @@ try:
     from scapy.layers.tls.extensions import TLSExtensionServerName as ModernTLSExtensionServerName
     ScapyServerNameClass = ModernScapyServerName
     TLSExtensionServerNameClass = ModernTLSExtensionServerName
-except Exception:
+except ImportError:
     try:
         from scapy.layers.tls.extensions import TLS_Ext_ServerName as OlderTLSExtensionServerName
         TLSExtensionServerNameClass = OlderTLSExtensionServerName
