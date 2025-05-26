@@ -12,7 +12,7 @@ def protocol_pie_chart(proto_counts: Dict[str, int]) -> alt.Chart:
     return alt.Chart(proto_df).mark_arc().encode(theta="count", color="protocol")
 
 
-def port_bar_chart(port_counts: Dict[str, int]):
+def port_bar_chart(port_counts: Dict[str, int]) -> alt.Chart:
     port_data = []
     for name, count in port_counts.items():
         if "_" in name:
