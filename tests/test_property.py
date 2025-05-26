@@ -49,4 +49,3 @@ def test_pcap_builder_roundtrip(tmp_path, payloads):
     from scapy.all import rdpcap
 
     assert len(rdpcap(str(path))) == len(payloads)
-

@@ -11,7 +11,11 @@ from pcap_tool.enrichment import Enricher
 from pcap_tool.metrics.retransmission import categorize_retransmission_severity
 from pcap_tool.utils import render_status_pill
 
-from .charts import protocol_pie_chart, port_bar_chart, tls_version_bar_chart
+from pcap_tool.ui.components.charts import (
+    port_bar_chart,
+    protocol_pie_chart,
+    tls_version_bar_chart,
+)
 
 
 error_summarizer = ErrorSummarizer()

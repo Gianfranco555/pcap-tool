@@ -34,7 +34,7 @@ except ImportError:
             ]
 
         ScapyServerNameClass = FallbackScapyServerNameEntry
-except ImportError:
+    except ImportError:
         ScapyServerNameClass = None
         TLSExtensionServerNameClass = None
 
@@ -225,4 +225,3 @@ class PacketFactory:
     @staticmethod
     def non_ip_packet(src_mac: str, dst_mac: str, eth_type: int = 0x88B5) -> Packet:
         return Ether(dst=dst_mac, src=src_mac, type=eth_type)
-
