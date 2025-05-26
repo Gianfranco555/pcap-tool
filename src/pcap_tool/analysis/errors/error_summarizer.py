@@ -16,6 +16,9 @@ class ErrorDetail(TypedDict):
 
 ErrorSummary = Dict[str, Union[ErrorDetail, Dict[str, ErrorDetail]]]
 
+# Generic row type for dataframe output
+ErrorDataFrameRow = Dict[str, object]
+
 
 class ErrorSummarizer:
     """Aggregate flow error tags from :class:`HeuristicEngine`."""
