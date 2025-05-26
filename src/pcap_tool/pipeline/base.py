@@ -71,14 +71,16 @@ class Pipeline:
                 )
 
         pipeline = cls()
-        for section, adder in (
-            ("processors", pipeline.add_processor),
-            ("analyzers", pipeline.add_analyzer),
-            ("reporters", pipeline.add_reporter),
-        ):
+        section_map = {
+            "processors": (pipeline.add_processor, BaseProcessor),
+            "analyzers": (pipeline.add_analyzer, BaseAnalyzer),
+            "reporters": (pipeline.add_reporter, BaseReporter),
+        }
+        for section, (adder, expected_type) in section_map.items():
             for item in config.get(section, []):
                 if isinstance(item, str):
                     obj = _load_object(item, {})
+                    name = item
                 else:
                     name = item.get("name")
                     if not isinstance(name, str) or not name:
@@ -87,6 +89,10 @@ class Pipeline:
                         )
                     params = item.get("params", {})
                     obj = _load_object(name, params)
+                if not isinstance(obj, expected_type):
+                    raise TypeError(
+                        f"Loaded component '{name}' is not an instance of {expected_type.__name__}"
+                    )
                 adder(obj)
         return pipeline
 
