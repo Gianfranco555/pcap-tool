@@ -16,6 +16,8 @@ from .metrics_builder import MetricsBuilder
 from pcap_tool.heuristics.engine import HeuristicEngine, VectorisedHeuristicEngine
 from .llm_summarizer import LLMSummarizer
 from .utils import safe_int_or_default
+from .core.cache import FlowCache
+from .core.config import settings
 from .pipeline_helpers import (
     load_packets,
     collect_stats,
@@ -24,37 +26,17 @@ from .pipeline_helpers import (
 )
 from .core.decorators import handle_analysis_errors, log_performance
 
+flow_cache = FlowCache(settings.flow_cache_size, settings.cache_enabled)
+
 
 def _derive_flow_id(rec: PcapRecord) -> Tuple[str, str, int, int, str]:
     """Return a tuple uniquely identifying the flow."""
-    return (
-        rec.source_ip or "",
-        rec.destination_ip or "",
-        safe_int_or_default(rec.source_port, 0),
-        safe_int_or_default(rec.destination_port, 0),
-        rec.protocol or "",
-    )
+    return flow_cache.derive_flow_id(rec)
 
 
 def _flow_cache_key(record: PcapRecord) -> str:
     """Return a direction-agnostic identifier for caching client IP/port."""
-    if record.tcp_stream_index is not None:
-        return f"TCP_STREAM_{record.tcp_stream_index}"
-    if record.source_ip and record.destination_ip and record.protocol:
-        props = sorted(
-            [
-                (
-                    record.source_ip,
-                    safe_int_or_default(record.source_port, 0),
-                ),
-                (
-                    record.destination_ip,
-                    safe_int_or_default(record.destination_port, 0),
-                ),
-            ]
-        )
-        return f"{record.protocol}_{props[0][0]}:{props[0][1]}_{props[1][0]}:{props[1][1]}"
-    return f"UNKNOWN_FLOW_{record.frame_number}"
+    return flow_cache.flow_cache_key(record)
 
 
 @handle_analysis_errors

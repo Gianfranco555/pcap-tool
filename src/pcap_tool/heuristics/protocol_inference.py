@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from typing import Mapping, Any
+
+from ..core.cache import PacketCache
+from ..core.config import settings
 import pandas as pd
 
 
@@ -20,6 +23,25 @@ _WELL_KNOWN_PORTS: dict[tuple[str, int], str] = {
     ("TCP", 143): "IMAP",
     ("TCP", 443): "HTTPS/TLS",
 }
+
+
+_packet_cache = PacketCache(settings.packet_cache_size, settings.cache_enabled)
+
+
+@_packet_cache.memoize
+def _guess_impl(protocol: str, src_port: int | None, dest_port: int | None, first_size: int | None) -> str:
+    if protocol == "UDP" and (dest_port == 443 or src_port == 443):
+        if first_size is not None and first_size > 1200:
+            return "QUIC"
+        return "QUIC_UDP_443"
+
+    port = dest_port if dest_port is not None else src_port
+    if port is not None:
+        guess = _WELL_KNOWN_PORTS.get((protocol, port))
+        if guess:
+            return guess
+
+    return protocol if protocol else "Unknown_L7"
 
 
 def _to_int(value: Any) -> int | None:
@@ -50,22 +72,9 @@ def guess_l7_protocol(flow_data: Mapping[str, Any]) -> str:
     src_port = _to_int(
         flow_data.get("src_port", flow_data.get("source_port"))
     )
+    first_size = _to_int(
+        flow_data.get("first_flight_bytes")
+        or flow_data.get("first_flight_packet_size")
+    )
 
-    # --- QUIC detection on UDP/443 ---
-    if protocol == "UDP" and (dest_port == 443 or src_port == 443):
-        first_size = _to_int(
-            flow_data.get("first_flight_bytes")
-            or flow_data.get("first_flight_packet_size")
-        )
-        if first_size is not None and first_size > 1200:
-            return "QUIC"
-        return "QUIC_UDP_443"
-
-    # --- Lookup table for other well-known ports ---
-    port = dest_port if dest_port is not None else src_port
-    if port is not None:
-        guess = _WELL_KNOWN_PORTS.get((protocol, port))
-        if guess:
-            return guess
-
-    return protocol if protocol else "Unknown_L7"
+    return _guess_impl(protocol, src_port, dest_port, first_size)

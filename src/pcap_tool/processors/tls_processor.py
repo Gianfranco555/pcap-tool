@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
+from ..core.cache import PacketCache
+from ..core.config import settings
+
 from ..core.models import PcapRecord
 from ..parsers.utils import _safe_int
 from . import PacketProcessor
@@ -76,6 +79,20 @@ TLS_ALERT_DESCRIPTION_MAP: Dict[int, str] = {
 }
 
 
+_packet_cache = PacketCache(settings.packet_cache_size, settings.cache_enabled)
+
+@_packet_cache.memoize
+def _map_tls_version(val: Any) -> Optional[str]:
+    if val is None:
+        return None
+    return TLS_VERSION_MAP.get(_safe_int(val), str(val))
+
+@_packet_cache.memoize
+def _map_tls_handshake_type(val: Any) -> Optional[str]:
+    if val is None:
+        return None
+    return TLS_HANDSHAKE_TYPE_MAP.get(_safe_int(val), str(val))
+
 def _extract_sni(packet: Any) -> Optional[str]:
     sni_value = None
     try:
@@ -140,16 +157,15 @@ class TLSProcessor(PacketProcessor):
             return {}
         result: Dict[str, Any] = {}
         result["sni"] = _extract_sni(extractor.packet)
-        result["tls_record_version"] = TLS_VERSION_MAP.get(
-            _safe_int(extractor.get("tls", "record_version", record.frame_number)),
-            extractor.get("tls", "record_version", record.frame_number),
+        result["tls_record_version"] = _map_tls_version(
+            extractor.get("tls", "record_version", record.frame_number)
         )
         hs_type = extractor.get("tls", "handshake_type", record.frame_number)
         if hs_type is not None:
-            result["tls_handshake_type"] = TLS_HANDSHAKE_TYPE_MAP.get(_safe_int(hs_type), str(hs_type))
+            result["tls_handshake_type"] = _map_tls_handshake_type(hs_type)
         hs_ver = extractor.get("tls", "handshake_version", record.frame_number)
         if hs_ver is not None:
-            result["tls_handshake_version"] = TLS_VERSION_MAP.get(_safe_int(hs_ver), str(hs_ver))
+            result["tls_handshake_version"] = _map_tls_version(hs_ver)
         result["tls_effective_version"] = result.get("tls_handshake_version") or result.get("tls_record_version")
         if extractor.get("tls", "record_content_type", record.frame_number) == "21":
             alert_level = extractor.get("tls", "alert_message_level", record.frame_number)
