@@ -39,42 +39,44 @@ class PerformanceAnalyzer:
             return []
 
         df = packets_df.sort_values("timestamp")
-        syn_times: Dict[tuple[str, int, str, int, str], float] = {}
-        rtts: List[float] = []
+        df = df[df["protocol"].str.upper() == "TCP"]
 
-        for row in df.itertuples(index=False):
-            proto = getattr(row, "protocol", None)
-            if not proto or str(proto).upper() != "TCP":
-                continue
+        syn = df[df["tcp_flags_syn"] & ~df["tcp_flags_ack"]]
+        synack = df[df["tcp_flags_syn"] & df["tcp_flags_ack"]]
 
-            is_client = getattr(row, "is_source_client", None)
-            if is_client is None:
-                is_client = getattr(row, "is_src_client", None)
+        syn = syn.assign(
+            flow_key=list(
+                zip(
+                    syn["source_ip"].fillna(""),
+                    syn["source_port"].fillna(0).astype(int),
+                    syn["destination_ip"].fillna(""),
+                    syn["destination_port"].fillna(0).astype(int),
+                )
+            )
+        )
 
-            syn = getattr(row, "tcp_flags_syn", False)
-            ack = getattr(row, "tcp_flags_ack", False)
+        synack = synack.assign(
+            flow_key=list(
+                zip(
+                    synack["destination_ip"].fillna(""),
+                    synack["destination_port"].apply(lambda x: safe_int_or_default(x, 0)),
+                    synack["source_ip"].fillna(""),
+                    synack["source_port"].apply(lambda x: safe_int_or_default(x, 0)),
+                )
+            )
+        )
 
-            src_ip = getattr(row, "source_ip", None)
-            dst_ip = getattr(row, "destination_ip", None)
-            src_port = safe_int_or_default(getattr(row, "source_port", None), 0)
-            dst_port = safe_int_or_default(getattr(row, "destination_port", None), 0)
+        syn_first = syn.groupby("flow_key", as_index=False)["timestamp"].min()
+        synack_first = synack.groupby("flow_key", as_index=False)["timestamp"].min()
 
-            if is_client and syn and not ack:
-                key = (src_ip or "", src_port, dst_ip or "", dst_port, "TCP")
-                if key not in syn_times:
-                    syn_times[key] = getattr(row, "timestamp", 0.0)
-                continue
+        merged = syn_first.merge(
+            synack_first, on="flow_key", suffixes=("_syn", "_ack")
+        )
+        merged = merged[merged["timestamp_ack"] >= merged["timestamp_syn"]]
+        merged["rtt"] = (merged["timestamp_ack"] - merged["timestamp_syn"]) * 1000.0
+        merged = merged[merged["rtt"] <= settings.tcp_rtt_timeout * 1000.0]
 
-            if not is_client and syn and ack:
-                rev_key = (dst_ip or "", dst_port, src_ip or "", src_port, "TCP")
-                syn_ts = syn_times.get(rev_key)
-                if syn_ts is not None:
-                    diff = getattr(row, "timestamp", 0.0) - syn_ts
-                    if 0 <= diff <= settings.tcp_rtt_timeout:
-                        rtts.append(diff * 1000.0)
-                    del syn_times[rev_key]
-
-        return rtts
+        return merged["rtt"].tolist()
 
     def add_packet(self, record: PcapRecord, flow_id_str: str, is_client_packet: bool) -> None:
         """Add a packet to the analyzer.
