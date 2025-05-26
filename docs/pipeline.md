@@ -31,3 +31,12 @@ reporters:
 ```
 
 Load the configuration using ``Pipeline.from_config("config.yaml")``.
+
+### Security Considerations
+
+Components are imported dynamically based on the ``name`` fields in the
+configuration file. **Only load configuration files from trusted sources**.
+An attacker who controls the file could point to malicious Python classes,
+leading to arbitrary code execution. The loader validates that each component
+inherits from the expected base class, but it cannot prevent execution of
+arbitrary import paths.
