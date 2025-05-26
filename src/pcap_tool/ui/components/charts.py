@@ -29,7 +29,7 @@ def tls_version_bar_chart(version_counts: Dict[str, int]) -> px.Figure:
     return px.bar(tls_df, x="count", y="version", orientation="h", title="Observed TLS Versions")
 
 
-def flow_outcome_chart(group_df: pd.DataFrame):
+def flow_outcome_chart(group_df: pd.DataFrame) -> px.Figure:
     return px.bar(
         group_df,
         x="protocol",
