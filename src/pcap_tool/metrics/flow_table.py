@@ -7,6 +7,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, Tuple, Iterable
 
+import pandas as pd
+
 from ..core.models import PcapRecord
 from ..utils import safe_int_or_default
 from ..heuristics.protocol_inference import guess_l7_protocol
@@ -86,7 +88,9 @@ class FlowTable:
         end = safe_int_or_default(end_ts, 0)
         return ",".join(str(bins.get(sec, 0)) for sec in range(start, end + 1))
 
-    def get_summary_df(self, top_n_bytes: int = 20, top_n_packets: int = 20):
+    def get_summary_df(
+        self, top_n_bytes: int = 20, top_n_packets: int = 20
+    ) -> tuple["pd.DataFrame", "pd.DataFrame"]:
         """Return two DataFrames ordered by bytes and packet count."""
         import pandas as pd
 

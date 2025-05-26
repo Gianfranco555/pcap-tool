@@ -1,5 +1,7 @@
 from typing import Generator, Optional
 
+from ..core.models import PcapRecord
+
 from ..parsers.pyshark_parser import PySharkParser, USE_PYSHARK
 
 
@@ -9,7 +11,7 @@ def _parse_with_pyshark(
     *,
     start: int = 0,
     slice_size: Optional[int] = None,
-) -> Generator:
+) -> Generator[PcapRecord, None, None]:
     """Backwards compatible wrapper around :class:`PySharkParser`."""
 
     parser = PySharkParser()

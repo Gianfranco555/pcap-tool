@@ -163,7 +163,7 @@ class PcapRecord:
 class ParsedHandle:
     """Represents parsed flows stored in memory or on disk."""
 
-    def __init__(self, backend: str, location: Any):
+    def __init__(self, backend: str, location: Any) -> None:
         self.backend = backend
         self.location = location
 
