@@ -30,7 +30,7 @@ def test_generate_pdf_report_error(monkeypatch):
     def boom(*args, **kwargs):
         raise ValueError("boom")
 
-    monkeypatch.setattr("pcap_tool.pdf_report._build_elements", boom)
+    monkeypatch.setattr("pcap_tool.reporting.pdf_report._build_elements", boom)
 
     with pytest.raises(ReportGenerationError):
         generate_pdf_report({})

@@ -27,6 +27,11 @@ class Settings(BaseSettings):
         description="Retransmission ratio percentage considered degraded",
     )
 
+    # Caching settings
+    cache_enabled: bool = Field(True, description="Enable caching of common lookups")
+    flow_cache_size: int = Field(10000, description="Maximum entries in flow cache")
+    packet_cache_size: int = Field(10000, description="Maximum entries in packet cache")
+
     # Reporting settings
     pdf_report_max_flows: int = Field(20, description="Top flows to include in PDF")
 
