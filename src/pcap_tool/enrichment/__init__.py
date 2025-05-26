@@ -65,10 +65,7 @@ class Enricher:
             logger.debug("GeoIP City database path provided: %s", geoip_city_db_path)
             try:
                 self.geoip_city_reader = geoip2.database.Reader(geoip_city_db_path)
-                if settings.cache_enabled:
-                    self._geoip_lookup_cached = self.packet_cache.memoize(self._geoip_lookup)
-                else:
-                    self._geoip_lookup_cached = self._geoip_lookup
+                self._geoip_lookup_cached = self.packet_cache.memoize(self._geoip_lookup)
             except Exception:
                 logger.exception("Failed to open GeoIP City database at %s", geoip_city_db_path)
 
@@ -76,10 +73,7 @@ class Enricher:
             logger.debug("GeoIP ASN database path provided: %s", geoip_asn_db_path)
             try:
                 self.geoip_asn_reader = geoip2.database.Reader(geoip_asn_db_path)
-                if settings.cache_enabled:
-                    self._asn_lookup_cached = self.packet_cache.memoize(self._asn_lookup)
-                else:
-                    self._asn_lookup_cached = self._asn_lookup
+                self._asn_lookup_cached = self.packet_cache.memoize(self._asn_lookup)
             except Exception:
                 logger.exception("Failed to open GeoIP ASN database at %s", geoip_asn_db_path)
 
@@ -87,15 +81,11 @@ class Enricher:
             logger.debug("GeoIP Country database path provided: %s", geoip_country_db_path)
             try:
                 self.geoip_country_reader = geoip2.database.Reader(geoip_country_db_path)
-                if settings.cache_enabled:
-                    self._country_lookup_cached = self.packet_cache.memoize(self._lookup_country)
-                else:
-                    self._country_lookup_cached = self._lookup_country
+                self._country_lookup_cached = self.packet_cache.memoize(self._lookup_country)
             except Exception:
                 logger.exception("Failed to open GeoIP Country database at %s", geoip_country_db_path)
 
-        if settings.cache_enabled:
-            self._rdns_lookup_cached = self.packet_cache.memoize(self._lookup_rdns)
+        self._rdns_lookup_cached = self.packet_cache.memoize(self._lookup_rdns)
 
     def enrich_ips(self, ips: list[str]) -> dict[str, dict[str, Any]]:
         """Return enrichment information for a list of IP addresses."""
