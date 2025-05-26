@@ -36,7 +36,9 @@ if uploaded_file and st.button("Parse & Analyze"):
         text = f"Processing PCAP… ({count}/{total})" if total else f"Processing packet {count}"
         progress.progress(min(value, 1.0), text=text)
 
-    rules_path = Path(__file__).resolve().parents[1] / "heuristics" / "rules.yaml"
+    rules_path = Path(__file__).resolve().parents[2] / "heuristics" / "rules.yaml"
+    print(f"DEBUG: Attempting to use rules_path: {rules_path.resolve()}")
+    print(f"DEBUG: File exists at rules_path: {rules_path.is_file()}")
     try:
         analyze_pcap(uploaded_file, rules_path, state, on_progress=update_progress)
         progress.progress(1.0, text="Analysis complete")
