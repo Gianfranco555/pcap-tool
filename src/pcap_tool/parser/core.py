@@ -1,4 +1,5 @@
 # src/pcap_tool/parser.py
+from __future__ import annotations
 from dataclasses import asdict
 from typing import TYPE_CHECKING, List, Optional
 from typing import (
@@ -411,7 +412,7 @@ def _parse_to_duckdb(
     chunk_size: int,
     on_progress: Callable[[int, Optional[int]], None] | None,
     workers: int | None,
-):
+) -> ParsedHandle:
     import duckdb
 
     conn = duckdb.connect(db_path)
@@ -441,7 +442,7 @@ def _parse_to_arrow(
     chunk_size: int,
     on_progress: Callable[[int, Optional[int]], None] | None,
     workers: int | None,
-):
+) -> ParsedHandle:
     import pyarrow as pa
     import pyarrow.ipc as ipc
 
@@ -464,7 +465,7 @@ def _parse_to_arrow(
 @handle_parse_errors
 @log_performance
 def parse_pcap(
-    file_like,
+    file_like: Path | IO[bytes],
     *,
     output_uri: str | None = None,
     workers: int | None = settings.max_workers,

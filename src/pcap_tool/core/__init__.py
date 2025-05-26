@@ -2,6 +2,7 @@ from .config import settings
 from .constants import *  # noqa: F401,F403
 from .dependencies import container
 from .models import PcapRecord, ParsedHandle
+from .types import FlowKey, PacketData, AnalysisResult, FlowKeyTuple, PacketList, JSONDict
 from .exceptions import (
     PcapToolError,
     PcapParsingError,
@@ -19,6 +20,12 @@ __all__ = [
     "container",
     "PcapRecord",
     "ParsedHandle",
+    "FlowKey",
+    "PacketData",
+    "AnalysisResult",
+    "FlowKeyTuple",
+    "PacketList",
+    "JSONDict",
     "PcapToolError",
     "PcapParsingError",
     "CorruptPcapError",
