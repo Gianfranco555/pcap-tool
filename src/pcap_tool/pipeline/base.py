@@ -92,6 +92,15 @@ class Pipeline:
 
 def _load_object(path: str, params: dict) -> Any:
     module_name, _, attr = path.rpartition(".")
-    module = import_module(module_name)
-    cls = getattr(module, attr)
-    return cls(**params)
+    try:
+        module = import_module(module_name)
+    except ModuleNotFoundError as e:
+        raise ValueError(f"Failed to import module '{module_name}' for component '{path}': {e}") from e
+    try:
+        cls = getattr(module, attr)
+    except AttributeError as e:
+        raise ValueError(f"Failed to find class '{attr}' in module '{module_name}' for component '{path}': {e}") from e
+    try:
+        return cls(**params)
+    except TypeError as e:
+        raise ValueError(f"Failed to instantiate component '{path}' with params {params}: {e}") from e
