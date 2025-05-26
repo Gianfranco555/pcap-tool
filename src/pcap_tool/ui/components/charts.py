@@ -7,7 +7,7 @@ import pandas as pd
 import plotly.express as px
 
 
-def protocol_pie_chart(proto_counts: Dict[str, int]):
+def protocol_pie_chart(proto_counts: Dict[str, int]) -> alt.Chart:
     proto_df = pd.DataFrame({"protocol": list(proto_counts.keys()), "count": list(proto_counts.values())})
     return alt.Chart(proto_df).mark_arc().encode(theta="count", color="protocol")
 
