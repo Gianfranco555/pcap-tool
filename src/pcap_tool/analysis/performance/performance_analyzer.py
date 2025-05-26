@@ -48,9 +48,9 @@ class PerformanceAnalyzer:
             flow_key=list(
                 zip(
                     syn["source_ip"].fillna(""),
-                    syn["source_port"].apply(lambda x: safe_int_or_default(x, 0)),
+                    syn["source_port"].fillna(0).astype(int),
                     syn["destination_ip"].fillna(""),
-                    syn["destination_port"].apply(lambda x: safe_int_or_default(x, 0)),
+                    syn["destination_port"].fillna(0).astype(int),
                 )
             )
         )
