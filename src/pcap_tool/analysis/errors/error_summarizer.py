@@ -79,7 +79,7 @@ class ErrorSummarizer:
 
     @handle_analysis_errors
     @log_performance
-    def get_error_details_for_dataframe(self, error_summary: ErrorSummary) -> List[Dict[str, object]]:
+    def get_error_details_for_dataframe(self, error_summary: ErrorSummary) -> List[ErrorDataFrameRow]:
         """Convert ``error_summary`` to a list of dicts for DataFrame display."""
         rows: List[Dict[str, object]] = []
         for err_type, info in error_summary.items():
