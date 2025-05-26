@@ -24,7 +24,7 @@ def port_bar_chart(port_counts: Dict[str, int]):
     return alt.Chart(ports_df).mark_bar().encode(x="port:N", y="count:Q", color="protocol:N")
 
 
-def tls_version_bar_chart(version_counts: Dict[str, int]):
+def tls_version_bar_chart(version_counts: Dict[str, int]) -> px.Figure:
     tls_df = pd.DataFrame(version_counts.items(), columns=["version", "count"])
     return px.bar(tls_df, x="count", y="version", orientation="h", title="Observed TLS Versions")
 
