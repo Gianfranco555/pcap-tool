@@ -10,7 +10,7 @@ from .session_state import AppState
 from pcap_tool.pipeline_app import run_analysis
 
 
-def analyze_pcap(uploaded_file, rules_path: Path, state: AppState, on_progress=None) -> None:
+def analyze_pcap(uploaded_file: st.runtime.uploaded_file_manager.UploadedFile, rules_path: Path, state: AppState, on_progress=None) -> None:
     state.analysis_ran = True
     temp_file_path = None
     try:
