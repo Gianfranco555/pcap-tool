@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from pcap_tool.heuristics import guess_l7_protocol
-from .charts import flow_outcome_chart
+from pcap_tool.ui.components.charts import flow_outcome_chart
 
 
 def display_flow_table(tagged_flow_df: pd.DataFrame, guess_protocol: Callable = guess_l7_protocol) -> None:

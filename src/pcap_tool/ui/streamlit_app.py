@@ -4,12 +4,16 @@ from pathlib import Path
 
 import streamlit as st
 
-from .session_state import get_state
-from .callbacks import analyze_pcap
-from .components.file_uploader import file_uploader
-from .components.metrics_display import display_overview, display_errors, display_timeline
-from .components.flow_table import display_flow_table
-from .components.export_buttons import export_buttons
+from pcap_tool.ui.session_state import get_state
+from pcap_tool.ui.callbacks import analyze_pcap
+from pcap_tool.ui.components.file_uploader import file_uploader
+from pcap_tool.ui.components.metrics_display import (
+    display_errors,
+    display_overview,
+    display_timeline,
+)
+from pcap_tool.ui.components.flow_table import display_flow_table
+from pcap_tool.ui.components.export_buttons import export_buttons
 
 
 st.set_page_config(page_title="PCAP Analysis Tool")

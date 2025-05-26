@@ -23,4 +23,3 @@ def assert_frames_equal(left: pd.DataFrame, right: pd.DataFrame, ignore_index: b
         left = left.reset_index(drop=True)
         right = right.reset_index(drop=True)
     pd.testing.assert_frame_equal(left, right, check_dtype=False)
-

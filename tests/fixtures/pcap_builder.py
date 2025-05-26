@@ -32,4 +32,3 @@ class PcapBuilder:
     def dns_query_response_pcap(cls, tmp_path: Path, **kwargs) -> Path:
         pkts = PacketFactory.dns_query_response_flow(**kwargs)
         return cls.build_in_temp(pkts, tmp_path, "dns_qr.pcap")
-

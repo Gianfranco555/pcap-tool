@@ -5,8 +5,8 @@ import tempfile
 from pathlib import Path
 
 import pandas as pd
-
-from .session_state import AppState
+import streamlit as st
+from pcap_tool.ui.session_state import AppState
 from pcap_tool.pipeline_app import run_analysis
 
 
