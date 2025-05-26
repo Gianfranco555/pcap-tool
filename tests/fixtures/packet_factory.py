@@ -34,7 +34,7 @@ except ImportError:
             ]
 
         ScapyServerNameClass = FallbackScapyServerNameEntry
-except ImportError:
+    except ImportError:
         ScapyServerNameClass = None
         TLSExtensionServerNameClass = None
 
