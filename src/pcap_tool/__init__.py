@@ -13,6 +13,7 @@ from .ai import prepare_ai_data
 from .metrics.stats_collector import StatsCollector
 from .analyze import PerformanceAnalyzer, ErrorSummarizer
 from .heuristics.engine import VectorisedHeuristicEngine
+from .pipeline import Pipeline, BaseProcessor, BaseAnalyzer, BaseReporter
 
 
 __all__ = [
@@ -32,4 +33,8 @@ __all__ = [
     "PerformanceAnalyzer",
     "ErrorSummarizer",
     "VectorisedHeuristicEngine",
+    "Pipeline",
+    "BaseProcessor",
+    "BaseAnalyzer",
+    "BaseReporter",
 ]
