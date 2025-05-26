@@ -15,6 +15,8 @@ class ErrorDetail(TypedDict):
 
 
 ErrorSummary = Dict[str, Union[ErrorDetail, Dict[str, ErrorDetail]]]
+# Simple structure used when converting an ``ErrorSummary`` into a DataFrame.
+ErrorDataFrameRow = Dict[str, object]
 
 
 class ErrorSummarizer:

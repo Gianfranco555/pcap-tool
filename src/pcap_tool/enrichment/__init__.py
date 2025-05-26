@@ -10,14 +10,22 @@ from functools import lru_cache
 from typing import Any, Callable, Optional
 
 geoip2 = None
-Reader = None  # type: ignore
+Reader = None  # type: ignore[var-annotated]
 
 if container.is_available("geoip2"):
     geoip2 = container.get("geoip2")  # type: ignore
-    geoip2 = container.get("geoip2")  # type: ignore
-    Reader = geoip2.database.Reader  # type: ignore
-    AddressNotFoundError = geoip2.errors.AddressNotFoundError  # type: ignore
+    try:
+        from geoip2 import database as geoip2_database, errors as geoip2_errors
+
+        Reader = geoip2_database.Reader  # type: ignore[attr-defined]
+        AddressNotFoundError = geoip2_errors.AddressNotFoundError  # type: ignore[attr-defined]
+    except Exception:  # pragma: no cover - optional dependency handling
+        Reader = None  # type: ignore[var-annotated]
+
+        class AddressNotFoundError(Exception):
+            pass
 else:
+
     class AddressNotFoundError(Exception):
         """Fallback error if geoip2 is unavailable."""
 
