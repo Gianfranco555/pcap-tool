@@ -2,9 +2,8 @@ from pathlib import Path
 
 import shutil
 import pytest
-from scapy.utils import PcapWriter
-from scapy.layers.l2 import Ether
-from scapy.layers.inet import IP, TCP, UDP, ICMP
+from tests.fixtures.packet_factory import PacketFactory
+from tests.fixtures.pcap_builder import PcapBuilder
 
 
 from pcap_tool.metrics.stats_collector import StatsCollector
@@ -30,14 +29,11 @@ def test_stats_collector_basic_fixture():
 def _create_fixture_pcap(path: Path) -> Path:
     """Create a tiny pcap with TCP, UDP and ICMP packets."""
     packets = [
-        Ether() / IP(src="1.1.1.1", dst="2.2.2.2") / TCP(sport=1234, dport=443),
-        Ether() / IP(src="3.3.3.3", dst="4.4.4.4") / UDP(sport=1234, dport=443),
-        Ether() / IP(src="5.5.5.5", dst="6.6.6.6") / ICMP(),
+        PacketFactory.tcp_packet("1.1.1.1", "2.2.2.2", 1234, 443),
+        PacketFactory.udp_packet("3.3.3.3", "4.4.4.4", 1234, 443),
+        PacketFactory.icmp_packet("5.5.5.5", "6.6.6.6"),
     ]
-    with PcapWriter(str(path), sync=True) as writer:
-        for pkt in packets:
-            writer.write(pkt)
-    return path
+    return PcapBuilder.build(packets, path)
 
 
 @pytest.fixture

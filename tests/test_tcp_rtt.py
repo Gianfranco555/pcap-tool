@@ -1,6 +1,7 @@
 import pytest
-from scapy.all import Ether, IP, TCP, PcapWriter
 from pathlib import Path
+from tests.fixtures.packet_factory import PacketFactory
+from tests.fixtures.pcap_builder import PcapBuilder
 
 from pcap_tool.parser import parse_pcap_to_df
 from pcap_tool.heuristics.metrics import compute_tcp_rtt_stats
@@ -9,16 +10,13 @@ from pcap_tool.analyze.performance_analyzer import PerformanceAnalyzer
 
 def _create_pcap(packets, tmp_path: Path, name: str) -> Path:
     p = tmp_path / name
-    with PcapWriter(str(p), sync=True) as w:
-        for pkt in packets:
-            w.write(pkt)
-    return p
+    return PcapBuilder.build(packets, p)
 
 
 @pytest.fixture
 def handshake_pcap(tmp_path: Path) -> Path:
-    pkt1 = Ether() / IP(src="1.1.1.1", dst="2.2.2.2") / TCP(sport=1234, dport=80, flags="S")
-    pkt2 = Ether() / IP(src="2.2.2.2", dst="1.1.1.1") / TCP(sport=80, dport=1234, flags="SA")
+    pkt1 = PacketFactory.tcp_packet("1.1.1.1", "2.2.2.2", 1234, 80, "S")
+    pkt2 = PacketFactory.tcp_packet("2.2.2.2", "1.1.1.1", 80, 1234, "SA")
     pkt1.time = 1.0
     pkt2.time = 2.0
     return _create_pcap([pkt1, pkt2], tmp_path, "handshake.pcap")
@@ -26,7 +24,7 @@ def handshake_pcap(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def syn_only_pcap(tmp_path: Path) -> Path:
-    pkt = Ether() / IP(src="3.3.3.3", dst="4.4.4.4") / TCP(sport=5555, dport=80, flags="S")
+    pkt = PacketFactory.tcp_packet("3.3.3.3", "4.4.4.4", 5555, 80, "S")
     pkt.time = 1.0
     return _create_pcap([pkt], tmp_path, "syn_only.pcap")
 

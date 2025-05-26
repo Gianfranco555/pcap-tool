@@ -15,120 +15,57 @@ from pcap_tool.models import PcapRecord
 from pcap_tool.exceptions import CorruptPcapError
 import shutil
 
+from tests.fixtures.packet_factory import PacketFactory
+from tests.fixtures.pcap_builder import PcapBuilder
+
 HAS_TSHARK = shutil.which("tshark") is not None
 
-from scapy.all import load_layer
-load_layer("tls")
-
-from scapy.packet import Packet
-from scapy.fields import ByteEnumField, FieldLenField, StrLenField
-from scapy.layers.l2 import Ether, ARP
-from scapy.layers.inet import IP, TCP, UDP, ICMP
-from scapy.layers.dns import DNS, DNSQR, DNSRR
-from scapy.layers.tls.record import TLS
-from scapy.layers.tls.handshake import TLSClientHello
-from scapy.packet import Raw
-from scapy.utils import PcapWriter
-
-
-ScapyServerNameClass = None
-TLSExtensionServerNameClass = None
-try:
-    from scapy.layers.tls.extensions import ServerName as ModernScapyServerName
-    from scapy.layers.tls.extensions import TLSExtensionServerName as ModernTLSExtensionServerName
-    ScapyServerNameClass = ModernScapyServerName
-    TLSExtensionServerNameClass = ModernTLSExtensionServerName
-    print("[INFO Scapy Imports] Using MODERN Scapy TLS extension imports.")
-except ImportError:
-    print("[INFO Scapy Imports] Modern Scapy TLS import failed, trying OLDER pattern.")
-    try:
-        from scapy.layers.tls.extensions import TLS_Ext_ServerName as OlderTLSExtensionServerName
-        TLSExtensionServerNameClass = OlderTLSExtensionServerName
-        class FallbackScapyServerNameEntry(Packet):
-            name = "ServerNameEntry (Fallback)"
-            fields_desc = [
-                ByteEnumField("name_type", 0, {0: "host_name"}),
-                FieldLenField("name_len", None, length_of="servername", fmt="!H"),
-                StrLenField("servername", b"", length_from=lambda pkt: pkt.name_len)
-            ]
-        ScapyServerNameClass = FallbackScapyServerNameEntry
-        print("[INFO Scapy Imports] Using OLDER Scapy TLS_Ext_ServerName and custom FallbackScapyServerNameEntry.")
-    except ImportError:
-        print("[ERROR Scapy Imports] OLDER Scapy TLS_Ext_ServerName import also failed.")
-        ScapyServerNameClass = None
-        TLSExtensionServerNameClass = None
-        print("[ERROR Scapy Imports] CRITICAL: Could not import any Scapy TLS ServerName or TLSExtensionServerName classes.")
-
-def create_pcap_file_with_desktop_copy(packets, tmp_path, filename="test.pcapng"):
-    pcap_file_path = tmp_path / filename
-    desktop_path = os.path.expanduser("~/Desktop")
-    inspect_filename = f"inspect_{Path(filename).stem}.pcap"
-    inspect_full_path = os.path.join(desktop_path, inspect_filename)
-    # print(f"\n[INFO Test Util] Attempting to save inspection PCAP to: {inspect_full_path}\n") # Reduce noise
-    try:
-        with PcapWriter(inspect_full_path, sync=True) as writer_inspect: # Use with statement
-            for pkt_inspect in packets:
-                writer_inspect.write(pkt_inspect)
-        # print(f"[INFO Test Util] Successfully saved inspection PCAP to: {inspect_full_path}\n")
-    except Exception as e:
-        print(f"[ERROR Test Util] ERROR saving inspection PCAP to Desktop: {e}\n")
-
-    with PcapWriter(str(pcap_file_path), sync=True) as writer: # Use with statement
-        for pkt in packets:
-            writer.write(pkt)
-    return pcap_file_path
-
-create_pcap_file = create_pcap_file_with_desktop_copy
+def create_pcap_file(packets, tmp_path, filename="test.pcapng"):
+    return PcapBuilder.build_in_temp(packets, tmp_path, filename)
 
 @pytest.fixture
 def happy_path_pcap(tmp_path):
-    # Ensure IP flags are correctly set if parser expects them (e.g. DF = 0x02)
-    # Scapy's flags field can take a string like "DF" or an integer.
-    pkt1 = (
-        Ether(src="00:11:22:33:44:01", dst="00:11:22:33:44:02")
-        / IP(src="192.168.1.100", dst="192.168.1.1", flags="DF", ttl=64)
-        / TCP(sport=12345, dport=80, flags="S")
+    pf = PacketFactory()
+    packets = []
+    packets.extend(
+        pf.tcp_handshake_flow(
+            src_ip="192.168.1.100",
+            dst_ip="192.168.1.1",
+            sport=12345,
+            dport=80,
+            src_mac="00:11:22:33:44:01",
+            dst_mac="00:11:22:33:44:02",
+        )
     )
-    pkt2 = (
-        Ether(src="00:11:22:33:44:02", dst="00:11:22:33:44:01")
-        / IP(src="192.168.1.1", dst="192.168.1.100", flags="DF", ttl=64)
-        / TCP(sport=80, dport=12345, flags="SA")
+    packets.append(
+        pf.tls_client_hello(
+            src_ip="192.168.1.100",
+            dst_ip="192.168.1.200",
+            sport=54321,
+            sni="test.example.com",
+            src_mac="00:11:22:33:44:01",
+            dst_mac="00:11:22:33:44:03",
+        )
     )
-    pkt3 = (
-        Ether(src="00:11:22:33:44:01", dst="00:11:22:33:44:02")
-        / IP(src="192.168.1.100", dst="192.168.1.1", flags="DF", ttl=64)
-        / TCP(sport=12345, dport=80, flags="A")
+    packets.append(
+        pf.udp_packet(
+            src_ip="192.168.1.101",
+            dst_ip="192.168.1.102",
+            sport=10000,
+            dport=53,
+            payload=b"DNSQuery",
+            src_mac="00:11:22:33:44:04",
+            dst_mac="00:11:22:33:44:05",
+        )
     )
-
-    if ScapyServerNameClass is None or TLSExtensionServerNameClass is None:
-        raise ImportError("ScapyServerNameClass or TLSExtensionServerNameClass could not be defined/imported.")
-
-    server_name_entry_obj = ScapyServerNameClass(servername=b"test.example.com")
-    sni_extension_obj = TLSExtensionServerNameClass(servernames=[server_name_entry_obj])
-    client_hello_obj = TLSClientHello(version=0x0303, ext=[sni_extension_obj])
-    client_hello_bytes = bytes(client_hello_obj)
-    # Correctly layer TLS record over Raw payload of TLS Handshake
-    tls_record_obj = TLS(type=22, version=0x0303, len=len(client_hello_bytes)) / Raw(load=client_hello_bytes)
-
-
-    pkt4 = (
-        Ether(src="00:11:22:33:44:01", dst="00:11:22:33:44:03")
-        / IP(src="192.168.1.100", dst="192.168.1.200", flags="DF", ttl=64)
-        / TCP(sport=54321, dport=443, flags="PA")
-        / tls_record_obj
+    packets.append(
+        pf.icmp_echo_request(
+            src_ip="192.168.1.103",
+            dst_ip="192.168.1.104",
+            src_mac="00:11:22:33:44:06",
+            dst_mac="00:11:22:33:44:07",
+        )
     )
-    pkt5 = (
-        Ether(src="00:11:22:33:44:04", dst="00:11:22:33:44:05")
-        / IP(src="192.168.1.101", dst="192.168.1.102", flags="DF", ttl=64)
-        / UDP(sport=10000, dport=53)
-        / Raw(load=b"DNSQuery")
-    )
-    pkt6 = (
-        Ether(src="00:11:22:33:44:06", dst="00:11:22:33:44:07")
-        / IP(src="192.168.1.103", dst="192.168.1.104", flags="DF", ttl=64)
-        / ICMP(type="echo-request")
-    )
-    packets = [pkt1, pkt2, pkt3, pkt4, pkt5, pkt6]
     base_time = 1678886400.0
     for i, pkt_val in enumerate(packets):
         pkt_val.time = base_time + i
@@ -136,17 +73,10 @@ def happy_path_pcap(tmp_path):
 
 @pytest.fixture
 def malformed_tls_pcap(tmp_path):
-    pkt1 = Ether()/IP(src="192.168.2.10", dst="192.168.2.20", flags="DF")/TCP(sport=23456, dport=443, flags="S") # Added DF
-    pkt1.time = 1678886500.000
-    pkt2 = (Ether() / IP(src="192.168.2.10", dst="192.168.2.20", flags="DF") / # Added DF
-            TCP(sport=23456, dport=443, flags="PA") / Raw(load=b"This is not a TLS packet payload."))
-    pkt2.time = 1678886500.100
-    client_hello_no_sni = TLSClientHello(ext=None)
-    tls_record_no_sni = TLS(type=22, version=0x0303) / client_hello_no_sni
-    pkt3 = (Ether() / IP(src="192.168.2.10", dst="192.168.2.20", flags="DF") / # Added DF
-            TCP(sport=23457, dport=443, flags="PA") / tls_record_no_sni)
-    pkt3.time = 1678886500.200
-    packets = [pkt1, pkt2, pkt3]
+    packets = PacketFactory.malformed_tls_flow("192.168.2.10", "192.168.2.20")
+    base_time = 1678886500.0
+    for i, pkt in enumerate(packets):
+        pkt.time = base_time + i * 0.1
     return create_pcap_file(packets, tmp_path, "malformed_tls.pcap")
 
 def assert_new_fields_logic(record_series, is_ip_packet=True, is_tcp_packet=False): # is_tcp_packet for potential future use
@@ -271,7 +201,7 @@ def test_empty_pcap(tmp_path):
     assert all(col in df.columns for col in expected_cols)
 
 def test_non_ip_packet(tmp_path):
-    pkt_l2 = Ether(dst="ff:ff:ff:ff:ff:ff", src="00:01:02:03:04:05", type=0x88B5)
+    pkt_l2 = PacketFactory.non_ip_packet(src_mac="00:01:02:03:04:05", dst_mac="ff:ff:ff:ff:ff:ff")
     pkt_l2.time = 1678886600.0
     non_ip_pcap_file = create_pcap_file([pkt_l2], tmp_path, "non_ip.pcap")
     df = parse_pcap(str(non_ip_pcap_file)).as_dataframe()
@@ -291,60 +221,57 @@ def test_non_ip_packet(tmp_path):
 
 @pytest.fixture
 def tcp_flags_pcap(tmp_path):
-    packets = []
-    packets.append(Ether(src="aa:aa:aa:aa:aa:aa", dst="bb:bb:bb:bb:bb:bb")/
-                    IP(src="10.0.0.1", dst="10.0.0.2")/
-                    TCP(sport=1111, dport=80, flags="S"))
-    packets.append(Ether()/IP(src="10.0.0.2", dst="10.0.0.1")/
-                    TCP(sport=80, dport=1111, flags="SA"))
-    packets.append(Ether()/IP(src="10.0.0.1", dst="10.0.0.2")/
-                    TCP(sport=1111, dport=80, flags="FPU"))
-    packets.append(Ether()/IP(src="10.0.0.2", dst="10.0.0.1")/
-                    TCP(sport=80, dport=1111, flags="R"))
+    packets = [
+        PacketFactory.tcp_packet(
+            "10.0.0.1",
+            "10.0.0.2",
+            1111,
+            80,
+            "S",
+            src_mac="aa:aa:aa:aa:aa:aa",
+            dst_mac="bb:bb:bb:bb:bb:bb",
+        ),
+        PacketFactory.tcp_packet("10.0.0.2", "10.0.0.1", 80, 1111, "SA"),
+        PacketFactory.tcp_packet("10.0.0.1", "10.0.0.2", 1111, 80, "FPU"),
+        PacketFactory.tcp_packet("10.0.0.2", "10.0.0.1", 80, 1111, "R"),
+    ]
     return create_pcap_file(packets, tmp_path, "tcp_flags.pcap")
 
 
 @pytest.fixture
 def dns_query_response_pcap(tmp_path):
-    query = (Ether()/IP(src="10.0.0.1", dst="8.8.8.8")/
-             UDP(sport=12345, dport=53)/
-             DNS(id=1, rd=1, qd=DNSQR(qname="example.com")))
-    response = (Ether()/IP(src="8.8.8.8", dst="10.0.0.1")/
-                UDP(sport=53, dport=12345)/
-                DNS(id=1, qr=1, aa=1, rcode=0,
-                    qd=DNSQR(qname="example.com"),
-                    an=DNSRR(rrname="example.com", rdata="93.184.216.34")))
-    return create_pcap_file([query, response], tmp_path, "dns_qr.pcap")
+    packets = PacketFactory.dns_query_response_flow("10.0.0.1", "8.8.8.8")
+    return create_pcap_file(packets, tmp_path, "dns_qr.pcap")
 
 
 @pytest.fixture
 def udp_443_non_quic_pcap(tmp_path):
-    pkt = Ether()/IP(src="10.10.10.1", dst="10.10.10.2", flags="DF")/UDP(sport=1111, dport=443)/Raw(load=b"hello")
+    pkt = PacketFactory.udp_packet("10.10.10.1", "10.10.10.2", 1111, 443, payload=b"hello")
     pkt.time = 1678886700.0
     return create_pcap_file([pkt], tmp_path, "udp443_not_quic.pcap")
 
 
 @pytest.fixture
 def pcapkit_l2_l3_test_pcap(tmp_path):
-    pkt = (
-        Ether(src="00:11:22:33:44:55", dst="AA:BB:CC:DD:EE:FF")
-        / IP(src="10.0.0.1", dst="10.0.0.2", ttl=60)
-        / TCP(sport=12345, dport=80)
+    pkt = PacketFactory.tcp_packet(
+        src_ip="10.0.0.1",
+        dst_ip="10.0.0.2",
+        sport=12345,
+        dport=80,
+        src_mac="00:11:22:33:44:55",
+        dst_mac="AA:BB:CC:DD:EE:FF",
+        ttl=60,
     )
     return create_pcap_file([pkt], tmp_path, "pcapkit_l2_l3.pcap")
 
 
 @pytest.fixture
 def pcapkit_arp_test_pcap(tmp_path):
-    arp_pkt = (
-        Ether(dst="ff:ff:ff:ff:ff:ff", src="00:01:02:03:04:05")
-        / ARP(
-            pdst="192.168.1.1",
-            psrc="192.168.1.100",
-            hwsrc="00:01:02:03:04:05",
-            hwdst="00:00:00:00:00:00",
-            op=1,
-        )
+    arp_pkt = PacketFactory.arp_request(
+        src_mac="00:01:02:03:04:05",
+        src_ip="192.168.1.100",
+        dst_mac="00:00:00:00:00:00",
+        dst_ip="192.168.1.1",
     )
     return create_pcap_file([arp_pkt], tmp_path, "pcapkit_arp.pcap")
 

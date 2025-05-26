@@ -3,9 +3,8 @@
 import pytest
 from pathlib import Path
 
-from scapy.layers.l2 import Ether
-from scapy.layers.inet import IP, ICMP
-from scapy.utils import PcapWriter
+from tests.fixtures.packet_factory import PacketFactory
+from tests.fixtures.pcap_builder import PcapBuilder
 
 from pcap_tool.parser import parse_pcap
 from pcap_tool.core.constants import (
@@ -15,15 +14,17 @@ from pcap_tool.core.constants import (
 
 
 def create_pcap_file(packets, tmp_path: Path, filename: str = "test.pcap") -> Path:
-    pcap_file_path = tmp_path / filename
-    with PcapWriter(str(pcap_file_path), sync=True) as writer:
-        for pkt in packets:
-            writer.write(pkt)
-    return pcap_file_path
+    return PcapBuilder.build_in_temp(packets, tmp_path, filename)
 
 
 def test_icmp_fragmentation_needed_original_mtu(tmp_path: Path):
-    pkt = Ether() / IP(src="10.0.0.1", dst="10.0.0.2") / ICMP(type=3, code=4, nexthopmtu=1400)
+    pkt = PacketFactory.icmp_packet(
+        src_ip="10.0.0.1",
+        dst_ip="10.0.0.2",
+        icmp_type=3,
+        code=4,
+        nexthopmtu=1400,
+    )
     pkt.time = 1.0
     pcap_path = create_pcap_file([pkt], tmp_path, "icmp_frag_needed.pcap")
     df = parse_pcap(str(pcap_path)).as_dataframe()
@@ -37,8 +38,8 @@ def test_zscaler_and_zpa_ip_flags(tmp_path: Path):
     zs_ip = str(ZSCALER_EXAMPLE_IP_RANGES[0][1])
     zpa_ip = str(ZPA_SYNTHETIC_IP_RANGE.network_address + 1)
 
-    pkt_a = Ether() / IP(src=zs_ip, dst="10.0.0.1") / ICMP()
-    pkt_b = Ether() / IP(src="10.0.0.1", dst=zpa_ip) / ICMP()
+    pkt_a = PacketFactory.icmp_packet(src_ip=zs_ip, dst_ip="10.0.0.1")
+    pkt_b = PacketFactory.icmp_packet(src_ip="10.0.0.1", dst_ip=zpa_ip)
     pkt_a.time = 1.0
     pkt_b.time = 2.0
     pcap_path = create_pcap_file([pkt_a, pkt_b], tmp_path, "z_flags.pcap")
