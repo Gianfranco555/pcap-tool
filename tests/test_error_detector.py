@@ -1,32 +1,28 @@
 import pytest
 from pathlib import Path
-from scapy.all import Ether, IP, TCP, ICMP, PcapWriter
+from tests.fixtures.packet_factory import PacketFactory
+from tests.fixtures.pcap_builder import PcapBuilder
 
 from pcap_tool.parser import parse_pcap_to_df
 
 
 def _create_pcap(packets, tmp_path: Path, name: str) -> Path:
     p = tmp_path / name
-    with PcapWriter(str(p), sync=True) as w:
-        for pkt in packets:
-            w.write(pkt)
-    return p
+    return PcapBuilder.build(packets, p)
 
 
 @pytest.fixture
 def error_packets_pcap(tmp_path: Path) -> Path:
     base_time = 1.0
-    pkt1 = Ether()/IP(src="1.1.1.1", dst="2.2.2.2")/ICMP(type=3, code=0)
-    pkt1.time = base_time
-    pkt2 = Ether()/IP(src="1.1.1.1", dst="2.2.2.2")/ICMP(type=3, code=3)
-    pkt2.time = base_time + 1
-    pkt3 = Ether()/IP(src="1.1.1.1", dst="2.2.2.2")/ICMP(type=11, code=0)
-    pkt3.time = base_time + 2
-    pkt4 = Ether()/IP(src="3.3.3.3", dst="4.4.4.4")/TCP(sport=1234, dport=80, flags="R")
-    pkt4.time = base_time + 3
-    pkt5 = Ether()/IP(src="5.5.5.5", dst="6.6.6.6")/TCP(sport=5555, dport=80, flags="A")
-    pkt5.time = base_time + 4
-    packets = [pkt1, pkt2, pkt3, pkt4, pkt5]
+    packets = [
+        PacketFactory.icmp_packet("1.1.1.1", "2.2.2.2", icmp_type=3, code=0),
+        PacketFactory.icmp_packet("1.1.1.1", "2.2.2.2", icmp_type=3, code=3),
+        PacketFactory.icmp_packet("1.1.1.1", "2.2.2.2", icmp_type=11, code=0),
+        PacketFactory.tcp_packet("3.3.3.3", "4.4.4.4", 1234, 80, "R"),
+        PacketFactory.tcp_packet("5.5.5.5", "6.6.6.6", 5555, 80, "A"),
+    ]
+    for i, pkt in enumerate(packets):
+        pkt.time = base_time + i
     return _create_pcap(packets, tmp_path, "errors.pcap")
 
 

@@ -2,20 +2,17 @@ import sys
 from pathlib import Path
 import resource
 import pytest
-from scapy.layers.l2 import Ether
-from scapy.layers.inet import IP, TCP
-from scapy.utils import PcapWriter
+from tests.fixtures.packet_factory import PacketFactory
+from tests.fixtures.pcap_builder import PcapBuilder
 
 from pcap_tool.parser import parse_pcap
 
 
 def _make_big_pcap(path: Path, count: int):
-    packets = [Ether()/IP(src="10.0.0.1", dst="10.0.0.2")/TCP(sport=1, dport=2) for _ in range(count)]
+    packets = [PacketFactory.tcp_packet("10.0.0.1", "10.0.0.2", 1, 2) for _ in range(count)]
     for i, pkt in enumerate(packets):
         pkt.time = float(i)
-    with PcapWriter(str(path), sync=True) as writer:
-        for pkt in packets:
-            writer.write(pkt)
+    PcapBuilder.build(packets, path)
 
 
 def _rss_mb() -> float:
