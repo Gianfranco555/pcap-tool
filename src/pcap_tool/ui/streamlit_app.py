@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import streamlit as st
+from pcap_tool.logging import get_logger
 
 from pcap_tool.ui.session_state import get_state
 from pcap_tool.ui.callbacks import analyze_pcap
@@ -16,6 +17,7 @@ from pcap_tool.ui.components.flow_table import display_flow_table
 from pcap_tool.ui.components.export_buttons import export_buttons
 
 
+logger = get_logger(__name__)
 st.set_page_config(page_title="PCAP Analysis Tool")
 st.title("PCAP Analysis Tool")
 
@@ -37,8 +39,8 @@ if uploaded_file and st.button("Parse & Analyze"):
         progress.progress(min(value, 1.0), text=text)
 
     rules_path = Path(__file__).resolve().parents[2] / "heuristics" / "rules.yaml"
-    print(f"DEBUG: Attempting to use rules_path: {rules_path.resolve()}")
-    print(f"DEBUG: File exists at rules_path: {rules_path.is_file()}")
+    logger.debug("Attempting to use rules_path: %s", rules_path.resolve())
+    logger.debug("File exists at rules_path: %s", rules_path.is_file())
     try:
         analyze_pcap(uploaded_file, rules_path, state, on_progress=update_progress)
         progress.progress(1.0, text="Analysis complete")
