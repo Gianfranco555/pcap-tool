@@ -6,4 +6,4 @@ def test_import_defrag():
 
 def test_import_reassembly():
     """Test that the reassembly extra (pcapkit) can be imported."""
-    pytest.importorskip("pcapkit")
+    pytest.importorskip("pypcapkit")
