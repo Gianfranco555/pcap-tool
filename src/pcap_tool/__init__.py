@@ -14,9 +14,11 @@ from .metrics.stats_collector import StatsCollector
 from .analyze import PerformanceAnalyzer, ErrorSummarizer
 from .heuristics.engine import VectorisedHeuristicEngine
 from .pipeline import Pipeline, BaseProcessor, BaseAnalyzer, BaseReporter
+from . import orchestrator
 
 
 __all__ = [
+    "orchestrator",
     "parse_pcap",
     "parse_pcap_to_df",
     "iter_parsed_frames",
