@@ -132,6 +132,26 @@ pytest
 ```
 You can also run `make setup` to install everything needed for local testing.
 
+## Optional Features
+
+This project supports optional features that can be installed as extras. These features are only supported on Linux and macOS.
+
+### IP Defragmentation
+
+For IP defragmentation support, install the `defrag` extra:
+
+```bash
+pip install -e .[defrag]
+```
+
+### TCP Reassembly
+
+For TCP reassembly support, install the `reassembly` extra:
+
+```bash
+pip install -e .[reassembly]
+```
+
 ### Data Columns
 
 Parsed DataFrames include many fields from the capture.  The `is_src_client`
