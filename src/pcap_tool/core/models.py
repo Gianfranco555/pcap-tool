@@ -156,7 +156,8 @@ class PcapRecord:
                 try:
                     if pd.isna(value):  # handles NaN and pandas.NA
                         value = default
-                except Exception:
+                except TypeError:
+                    # pd.isna can raise TypeError for some types, assume not NA.
                     pass
 
             if base_type in (int,):
