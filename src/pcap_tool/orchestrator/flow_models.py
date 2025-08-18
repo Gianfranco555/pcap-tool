@@ -117,12 +117,13 @@ class Flow:
 
         c2s_bytes = c2s_packets = s2c_bytes = s2c_packets = 0
         syn = synack = final_ack = False
+        is_tcp = proto == "TCP"
 
         for pkt in packets_sorted:
             if pkt.source_ip == client_ip and pkt.source_port == client_port:
                 c2s_packets += 1
                 c2s_bytes += pkt.packet_length
-                if pkt.protocol.upper() == "TCP":
+                if is_tcp:
                     if pkt.tcp_flags_syn and not pkt.tcp_flags_ack:
                         syn = True
                     if synack and pkt.tcp_flags_ack and not pkt.tcp_flags_syn:
@@ -130,7 +131,7 @@ class Flow:
             elif pkt.source_ip == server_ip and pkt.source_port == server_port:
                 s2c_packets += 1
                 s2c_bytes += pkt.packet_length
-                if pkt.protocol.upper() == "TCP" and pkt.tcp_flags_syn and pkt.tcp_flags_ack:
+                if is_tcp and pkt.tcp_flags_syn and pkt.tcp_flags_ack:
                     synack = True
 
         handshake_complete = syn and synack and final_ack
