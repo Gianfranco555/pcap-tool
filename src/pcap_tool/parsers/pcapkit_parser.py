@@ -221,7 +221,6 @@ def _parse_with_pcapkit(file_path: str, max_packets: Optional[int]) -> Generator
                 def __init__(self, *args, **kwargs):
                     super(AttrDict, self).__init__(*args, **kwargs)
                     self.__dict__ = self
-
             yield PcapRecord.from_parser_row(AttrDict(record_dict))
 
             generated_records += 1
