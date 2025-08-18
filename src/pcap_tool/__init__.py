@@ -11,7 +11,7 @@ from .reporting.summary import generate_summary_df, export_summary_excel
 from .utils import export_to_csv, anonymize_ip
 from .ai import prepare_ai_data
 from .metrics.stats_collector import StatsCollector
-from .analyze import PerformanceAnalyzer, ErrorSummarizer
+from .analysis import PerformanceAnalyzer, ErrorSummarizer
 from .heuristics.engine import VectorisedHeuristicEngine
 from .pipeline import Pipeline, BaseProcessor, BaseAnalyzer, BaseReporter
 from . import orchestrator

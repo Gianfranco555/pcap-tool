@@ -1,6 +1,6 @@
 processors:
   - name: pcap_tool.processors.tcp_processor.TCPProcessor
 analyzers:
-  - name: pcap_tool.analyze.performance.PerformanceAnalyzer
+  - name: pcap_tool.analysis.performance.PerformanceAnalyzer
 reporters:
   - name: pcap_tool.reporting.summary.SummaryReporter

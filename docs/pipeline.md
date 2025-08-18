@@ -25,10 +25,12 @@ step and total number of steps so UIs can display status information.
 processors:
   - name: pcap_tool.processors.tcp_processor.TCPProcessor
 analyzers:
-  - name: pcap_tool.analyze.performance.PerformanceAnalyzer
+  - name: pcap_tool.analysis.performance.PerformanceAnalyzer
 reporters:
   - name: pcap_tool.reporting.summary.SummaryReporter
 ```
+
+Note: analyzers are referenced via the `pcap_tool.analysis` namespace. The older `pcap_tool.analyze` paths continue to work but are deprecated.
 
 Load the configuration using ``Pipeline.from_config("config.yaml")``.
 

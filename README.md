@@ -170,3 +170,10 @@ Parse a capture directly to DuckDB for ad-hoc SQL:
 pcap-tool parse big.pcap --output duckdb://big.db
 duckdb big.db "SELECT tunnel_type, COUNT(*) FROM flows GROUP BY 1;"
 ```
+
+## Analysis API
+
+Analysis helpers such as `PerformanceAnalyzer`, `ErrorSummarizer` and
+`SecurityAuditor` live under the `pcap_tool.analysis` namespace. The older
+`pcap_tool.analyze` package remains as a deprecated alias and will be removed in
+a future release.

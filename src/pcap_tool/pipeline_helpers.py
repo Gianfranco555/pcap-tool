@@ -13,7 +13,7 @@ from .core.models import PcapRecord
 from .metrics.stats_collector import StatsCollector
 from .metrics.flow_table import FlowTable
 from .metrics.timeline_builder import TimelineBuilder
-from .analyze import PerformanceAnalyzer
+from .analysis import PerformanceAnalyzer
 from .utils import safe_int
 from .core.decorators import handle_analysis_errors, log_performance
 
