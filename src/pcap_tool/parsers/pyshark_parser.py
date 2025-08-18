@@ -139,7 +139,6 @@ class PySharkParser(BaseParser):
             def __init__(self, *args, **kwargs):
                 super(AttrDict, self).__init__(*args, **kwargs)
                 self.__dict__ = self
-
         return PcapRecord.from_parser_row(AttrDict(row_data))
 
     def _extract_layer_data(self, packet: "PySharkPacket", record_dict: dict[str, Any]) -> None:
