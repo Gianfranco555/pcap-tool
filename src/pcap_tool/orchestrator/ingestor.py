@@ -40,10 +40,9 @@ def iter_parsed_frames(path: str) -> Iterator[PcapRecord]:
         # implementation.  Normalise by converting to a dictionary before
         # feeding it into ``from_parser_row``.
         if isinstance(row, PcapRecord):  # pragma: no cover - defensive
-            row_dict = asdict(row)
+            yield row
         else:
-            row_dict = row
-        yield PcapRecord.from_parser_row(row_dict)
+            yield PcapRecord.from_parser_row(row)
 
 
 __all__ = ["iter_parsed_frames"]
