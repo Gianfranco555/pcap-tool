@@ -16,7 +16,7 @@ class DummyParser:
     def validate(cls) -> bool:  # pragma: no cover - not used directly
         return True
 
-    def parse(self, file_path: str, max_packets, *, start: int = 0, slice_size=None):
+    def parse(self, _file_path: str, *, max_packets=None, _start: int = 0, _slice_size=None):
         for i in range(self.count):
             self.generated += 1
             yield {"frame_number": i}
