@@ -123,7 +123,6 @@ class PySharkParser(BaseParser):
                 if is_flag:
                     return _safe_str_to_bool(raw_value)
                 return raw_value
-
         extractor = PacketExtractor(packet)
         self._extract_layer_data(packet, row_data)
 
