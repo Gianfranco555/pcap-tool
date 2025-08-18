@@ -29,10 +29,10 @@ class FlowKey:
     lower port number.
     """
 
-    src_ip: str
-    src_port: int
-    dst_ip: str
-    dst_port: int
+    client_ip: str
+    client_port: int
+    server_ip: str
+    server_port: int
     l4_proto: str
 
 
