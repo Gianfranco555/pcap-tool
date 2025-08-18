@@ -48,8 +48,8 @@ def _build_flow_id(key: FlowKey, start_ts: float) -> FlowId:
     """
 
     return FlowId(
-        f"{key.l4_proto}:{key.src_ip}:{key.src_port}->"
-        f"{key.dst_ip}:{key.dst_port}#{start_ts:.6f}"
+        f"{key.l4_proto}:{key.client_ip}:{key.client_port}->"
+        f"{key.server_ip}:{key.server_port}#{start_ts:.6f}"
     )
 
 
