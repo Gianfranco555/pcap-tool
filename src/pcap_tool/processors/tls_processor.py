@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pandas as pd
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from ..core.cache import PacketCache
@@ -149,31 +150,74 @@ def _extract_sni(packet: Any) -> Optional[str]:
 class TLSProcessor(PacketProcessor):
     """Extract TLS handshake and certificate details."""
 
+    def _extract_certificate_info(self, extractor: "PacketExtractor") -> Dict[str, Any]:
+        """Extracts certificate info by checking for flattened fields directly on the packet."""
+        cert_info = {}
+        packet = extractor.packet
+
+        # Common Names for Subject and Issuer
+        subject_cn = getattr(packet, 'x509af_signedCertificate_subject_rdnSequence_item_commonName', None)
+        issuer_cn = getattr(packet, 'x509af_signedCertificate_issuer_rdnSequence_item_commonName', None)
+
+        # Fallbacks for different tshark versions
+        if subject_cn is None:
+            subject_cn = getattr(packet, 'x509ce_subject_rdnSequence_item_commonName', None)
+        if issuer_cn is None:
+            issuer_cn = getattr(packet, 'x509ce_issuer_rdnSequence_item_commonName', None)
+
+        if subject_cn:
+            cert_info['tls_cert_subject_cn'] = str(subject_cn)
+        if issuer_cn:
+             cert_info['tls_cert_issuer_cn'] = str(issuer_cn)
+
+        # Not After Timestamp
+        not_after = getattr(packet, 'x509af_signedCertificate_validity_notAfter', None)
+        if not_after is None:
+            not_after = getattr(packet, 'x509ce_validity_notAfter', None)
+
+        if not_after:
+            try:
+                cert_info['tls_cert_not_after'] = pd.to_datetime(str(not_after))
+            except (ValueError, TypeError):
+                pass  # Handle cases where the date format is unexpected
+
+        # Self-signed heuristic
+        if subject_cn and issuer_cn and subject_cn == issuer_cn:
+            cert_info['tls_cert_is_self_signed'] = True
+        else:
+            cert_info['tls_cert_is_self_signed'] = False
+
+        return cert_info
+
     def reset(self) -> None:  # pragma: no cover - stateless
         return None
 
     def process_packet(self, extractor: "PacketExtractor", record: PcapRecord) -> Dict[str, Any]:
-        if not hasattr(extractor.packet, "tls"):
-            return {}
         result: Dict[str, Any] = {}
-        result["sni"] = _extract_sni(extractor.packet)
-        result["tls_record_version"] = _map_tls_version(
-            extractor.get("tls", "record_version", record.frame_number)
-        )
-        hs_type = extractor.get("tls", "handshake_type", record.frame_number)
-        if hs_type is not None:
-            result["tls_handshake_type"] = _map_tls_handshake_type(hs_type)
-        hs_ver = extractor.get("tls", "handshake_version", record.frame_number)
-        if hs_ver is not None:
-            result["tls_handshake_version"] = _map_tls_version(hs_ver)
-        result["tls_effective_version"] = result.get("tls_handshake_version") or result.get("tls_record_version")
-        if extractor.get("tls", "record_content_type", record.frame_number) == "21":
-            alert_level = extractor.get("tls", "alert_message_level", record.frame_number)
-            alert_desc = extractor.get("tls", "alert_message_desc", record.frame_number)
-            if alert_level is not None:
-                result["tls_alert_level"] = TLS_ALERT_LEVEL_MAP.get(_safe_int(alert_level), str(alert_level))
-            if alert_desc is not None:
-                result["tls_alert_message_description"] = TLS_ALERT_DESCRIPTION_MAP.get(_safe_int(alert_desc), str(alert_desc))
+        if hasattr(extractor.packet, "tls"):
+            # ... (your existing TLS processing logic for handshake, alerts, etc.)
+            result["sni"] = _extract_sni(extractor.packet)
+            result["tls_record_version"] = _map_tls_version(
+                extractor.get("tls", "record_version", record.frame_number)
+            )
+            hs_type = extractor.get("tls", "handshake_type", record.frame_number)
+            if hs_type is not None:
+                result["tls_handshake_type"] = _map_tls_handshake_type(hs_type)
+            hs_ver = extractor.get("tls", "handshake_version", record.frame_number)
+            if hs_ver is not None:
+                result["tls_handshake_version"] = _map_tls_version(hs_ver)
+            result["tls_effective_version"] = result.get("tls_handshake_version") or result.get("tls_record_version")
+            if extractor.get("tls", "record_content_type", record.frame_number) == "21":
+                alert_level = extractor.get("tls", "alert_message_level", record.frame_number)
+                alert_desc = extractor.get("tls", "alert_message_desc", record.frame_number)
+                if alert_level is not None:
+                    result["tls_alert_level"] = TLS_ALERT_LEVEL_MAP.get(_safe_int(alert_level), str(alert_level))
+                if alert_desc is not None:
+                    result["tls_alert_message_description"] = TLS_ALERT_DESCRIPTION_MAP.get(_safe_int(alert_desc), str(alert_desc))
+
+        # Always check for certificate info, regardless of the main 'tls' layer
+        result.update(self._extract_certificate_info(extractor))
+
         return {k: v for k, v in result.items() if v is not None}
 
 

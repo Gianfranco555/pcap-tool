@@ -81,30 +81,29 @@ def malformed_tls_pcap(tmp_path):
 
 def assert_new_fields_logic(record_series, is_ip_packet=True, is_tcp_packet=False): # is_tcp_packet for potential future use
     """Asserts new fields, handling booleans correctly based on IP/TCP presence."""
-    assert pd.isna(record_series["gre_protocol"]), f"GRE Protocol: Expected NA, got {record_series['gre_protocol']}"
-    assert pd.isna(record_series["esp_spi"]), f"ESP SPI: Expected NA, got {record_series['esp_spi']}"
-    assert pd.isna(record_series["quic_initial_packet_present"]), f"QUIC Initial: Expected NA, got {record_series['quic_initial_packet_present']}"
-    assert pd.isna(record_series["is_quic"]), f"is_quic: Expected NA, got {record_series['is_quic']}"
-    assert pd.isna(record_series["ssl_inspection_active"]), f"SSL Inspection: Expected NA, got {record_series['ssl_inspection_active']}"
-    assert pd.isna(record_series["zscaler_policy_block_type"]), f"ZS Policy Block: Expected NA, got {record_series['zscaler_policy_block_type']}"
+    assert record_series["gre_protocol"] == "", f"GRE Protocol: Expected empty string, got {record_series['gre_protocol']}"
+    assert record_series["esp_spi"] == "", f"ESP SPI: Expected empty string, got {record_series['esp_spi']}"
+    assert record_series["quic_initial_packet_present"] == False, f"QUIC Initial: Expected False, got {record_series['quic_initial_packet_present']}"
+    assert record_series["is_quic"] == False, f"is_quic: Expected False, got {record_series['is_quic']}"
+    assert record_series["ssl_inspection_active"] == False, f"SSL Inspection: Expected False, got {record_series['ssl_inspection_active']}"
+    assert record_series["zscaler_policy_block_type"] == "", f"ZS Policy Block: Expected empty string, got {record_series['zscaler_policy_block_type']}"
 
     if is_ip_packet:
-        # CHANGE: Use '== False' for value comparison with Pandas/NumPy bools
         assert record_series["is_zscaler_ip"] == False, \
             f"is_zscaler_ip: Expected False, got {record_series['is_zscaler_ip']}"
         assert record_series["is_zpa_synthetic_ip"] == False, \
             f"is_zpa_synthetic_ip: Expected False, got {record_series['is_zpa_synthetic_ip']}"
     else:
-        assert pd.isna(record_series["is_zscaler_ip"]), \
-            f"is_zscaler_ip (non-IP): Expected NA, got {record_series['is_zscaler_ip']}"
-        assert pd.isna(record_series["is_zpa_synthetic_ip"]), \
-            f"is_zpa_synthetic_ip (non-IP): Expected NA, got {record_series['is_zpa_synthetic_ip']}"
+        assert record_series["is_zscaler_ip"] == False, \
+            f"is_zscaler_ip (non-IP): Expected False, got {record_series['is_zscaler_ip']}"
+        assert record_series["is_zpa_synthetic_ip"] == False, \
+            f"is_zpa_synthetic_ip (non-IP): Expected False, got {record_series['is_zpa_synthetic_ip']}"
 
     if is_tcp_packet:
         val = record_series["is_src_client"]
-        assert pd.isna(val) or val in [True, False]
+        assert val in [True, False]
     else:
-        assert pd.isna(record_series["is_src_client"])
+        assert record_series["is_src_client"] == False
 
 def test_happy_path_parsing(happy_path_pcap):
     df = parse_pcap(str(happy_path_pcap)).as_dataframe()
@@ -123,10 +122,9 @@ def test_happy_path_parsing(happy_path_pcap):
     assert syn["protocol_l3"] in ["IPv4", "IP"]
     assert syn["ip_ttl"] == 64
     assert syn["protocol"] == "TCP"
-    # CHANGE: Use '== True' for value comparison
     assert syn["tcp_flags_syn"] == True, f"tcp_flags_syn: Expected True, got {syn['tcp_flags_syn']}"
     assert syn["ip_flags_df"] == True, f"ip_flags_df: Expected True, got {syn['ip_flags_df']}"
-    assert pd.isna(syn["sni"])
+    assert syn["sni"] == ""
     assert_new_fields_logic(syn, is_tcp_packet=True)
 
 
@@ -139,7 +137,6 @@ def test_happy_path_parsing(happy_path_pcap):
     assert tls_rec["destination_mac"] == "00:11:22:33:44:03"
     assert tls_rec["protocol_l3"] in ["IPv4", "IP"]
     assert tls_rec["ip_ttl"] == 64
-    # Assuming pkt4 also has DF flag set in its IP layer
     assert tls_rec["ip_flags_df"] == True, f"tls_rec ip_flags_df: Expected True, got {tls_rec['ip_flags_df']}"
     assert_new_fields_logic(tls_rec, is_tcp_packet=True)
 
@@ -176,19 +173,18 @@ def test_malformed_or_no_sni_tls_packet(malformed_tls_pcap):
     assert len(df) == 3, f"Expected 3 packets, got {len(df)}"
 
     rec1 = df.iloc[0]
-    assert rec1["protocol"] == "TCP" and pd.isna(rec1["sni"])
-    # CHANGE: Use '== True' for value comparison
+    assert rec1["protocol"] == "TCP" and rec1["sni"] == ""
     assert rec1["tcp_flags_syn"] == True, f"rec1 tcp_flags_syn: Expected True, got {rec1['tcp_flags_syn']}"
     assert rec1["ip_flags_df"] == True, f"rec1 ip_flags_df: Expected True, got {rec1['ip_flags_df']}" # Assuming DF set in fixture
     assert_new_fields_logic(rec1, is_tcp_packet=True)
 
     rec2 = df.iloc[1]
-    assert rec2["protocol"] == "TCP" and pd.isna(rec2["sni"])
+    assert rec2["protocol"] == "TCP" and rec2["sni"] == ""
     assert rec2["ip_flags_df"] == True, f"rec2 ip_flags_df: Expected True, got {rec2['ip_flags_df']}" # Assuming DF set in fixture
     assert_new_fields_logic(rec2, is_tcp_packet=True)
 
     rec3 = df.iloc[2]
-    assert rec3["protocol"] == "TCP" and pd.isna(rec3["sni"])
+    assert rec3["protocol"] == "TCP" and rec3["sni"] == ""
     assert rec3["ip_flags_df"] == True, f"rec3 ip_flags_df: Expected True, got {rec3['ip_flags_df']}" # Assuming DF set in fixture
     assert_new_fields_logic(rec3, is_tcp_packet=True)
 
@@ -209,10 +205,10 @@ def test_non_ip_packet(tmp_path):
     assert len(df) == 1, f"Expected 1 non-IP packet, got {len(df)}"
     rec = df.iloc[0]
     assert rec["frame_number"] == 1
-    assert pd.isna(rec["source_ip"])
-    assert pd.isna(rec["destination_ip"])
-    assert pd.isna(rec["protocol_l3"])
-    assert pd.isna(rec["protocol"])
+    assert rec["source_ip"] == ""
+    assert rec["destination_ip"] == ""
+    assert rec["protocol_l3"] == ""
+    assert rec["protocol"] == ""
     assert rec["raw_packet_summary"] is not None
     assert rec["source_mac"] == "00:01:02:03:04:05"
     assert rec["destination_mac"] == "ff:ff:ff:ff:ff:ff"
@@ -308,7 +304,7 @@ def test_dns_query_and_response(dns_query_response_pcap):
     assert len(df) == 2
     q = df.iloc[0]
     assert q["dns_query_name"] == "example.com"
-    assert pd.isna(q["dns_response_code"])
+    assert q["dns_response_code"] == ""
     r = df.iloc[1]
     assert r["dns_query_name"] == "example.com"
     assert r["dns_response_code"] == "NOERROR"

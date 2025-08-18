@@ -60,67 +60,63 @@ def _parse_with_pcapkit(file_path: str, max_packets: Optional[int]) -> Generator
         extractor = pcapkit_extract(**extract_kwargs)
         for frame in extractor:
             packet_count += 1
-
-            timestamp = float(getattr(frame.info, "time_epoch", 0.0))
-            length = getattr(frame.info, "cap_len", None)
-
-            record = PcapRecord(
-                frame_number=packet_count,
-                timestamp=timestamp,
-                packet_length=length,
-            )
+            record_dict = {
+                "frame_number": packet_count,
+                "timestamp": float(getattr(frame.info, "time_epoch", 0.0)),
+                "packet_length": getattr(frame.info, "cap_len", None),
+            }
 
             eth = getattr(frame.info, "ethernet", None)
             ip_layer = None
             if eth is not None:
-                record.source_mac = getattr(eth, "src", None)
-                record.destination_mac = getattr(eth, "dst", None)
+                record_dict["source_mac"] = getattr(eth, "src", None)
+                record_dict["destination_mac"] = getattr(eth, "dst", None)
 
                 if hasattr(eth, "ipv4"):
                     ipv4 = eth.ipv4
                     ip_layer = ipv4
-                    record.protocol_l3 = "IPv4"
-                    record.source_ip = getattr(ipv4, "src", None)
-                    record.destination_ip = getattr(ipv4, "dst", None)
+                    record_dict["protocol_l3"] = "IPv4"
+                    record_dict["source_ip"] = getattr(ipv4, "src", None)
+                    record_dict["destination_ip"] = getattr(ipv4, "dst", None)
                     ttl_val = getattr(ipv4, "ttl", None)
                     if ttl_val is not None:
-                        record.ip_ttl = int(ttl_val.total_seconds()) if hasattr(ttl_val, "total_seconds") else int(ttl_val)
+                        record_dict["ip_ttl"] = int(ttl_val.total_seconds()) if hasattr(ttl_val, "total_seconds") else int(ttl_val)
                     proto = getattr(ipv4, "protocol", getattr(ipv4, "proto", None))
                     if proto is not None:
-                        record.protocol = getattr(proto, "name", str(proto))
+                        record_dict["protocol"] = getattr(proto, "name", str(proto))
 
                 elif hasattr(eth, "ipv6"):
                     ipv6 = eth.ipv6
                     ip_layer = ipv6
-                    record.protocol_l3 = "IPv6"
-                    record.source_ip = getattr(ipv6, "src", None)
-                    record.destination_ip = getattr(ipv6, "dst", None)
+                    record_dict["protocol_l3"] = "IPv6"
+                    record_dict["source_ip"] = getattr(ipv6, "src", None)
+                    record_dict["destination_ip"] = getattr(ipv6, "dst", None)
                     ttl_val = (
                         getattr(ipv6, "limit", None)
                         or getattr(ipv6, "hop_limit", None)
                         or getattr(ipv6, "ttl", None)
                     )
                     if ttl_val is not None:
-                        record.ip_ttl = int(ttl_val.total_seconds()) if hasattr(ttl_val, "total_seconds") else int(ttl_val)
+                        record_dict["ip_ttl"] = int(ttl_val.total_seconds()) if hasattr(ttl_val, "total_seconds") else int(ttl_val)
                     proto = (
                         getattr(ipv6, "next_header", None)
                         or getattr(ipv6, "nxt", None)
                         or getattr(ipv6, "protocol", None)
                     )
                     if proto is not None:
-                        record.protocol = getattr(proto, "name", str(proto))
+                        record_dict["protocol"] = getattr(proto, "name", str(proto))
 
                 elif hasattr(eth, "arp"):
                     arp = eth.arp
-                    record.protocol_l3 = "ARP"
-                    record.arp_sender_mac = getattr(arp, "src_hw_mac", None)
-                    record.arp_sender_ip = getattr(arp, "src_proto_ipv4", None)
-                    record.arp_target_mac = getattr(arp, "dst_hw_mac", None)
-                    record.arp_target_ip = getattr(arp, "dst_proto_ipv4", None)
-                    record.arp_opcode = getattr(arp, "opcode", None)
+                    record_dict["protocol_l3"] = "ARP"
+                    record_dict["arp_sender_mac"] = getattr(arp, "src_hw_mac", None)
+                    record_dict["arp_sender_ip"] = getattr(arp, "src_proto_ipv4", None)
+                    record_dict["arp_target_mac"] = getattr(arp, "dst_hw_mac", None)
+                    record_dict["arp_target_ip"] = getattr(arp, "dst_proto_ipv4", None)
+                    record_dict["arp_opcode"] = getattr(arp, "opcode", None)
 
             # ── L4 Processing ───────────────────────────────────────────────
-            if record.protocol == "TCP":
+            if record_dict.get("protocol") == "TCP":
                 tcp_layer = None
                 if hasattr(frame.info, "tcp"):
                     tcp_layer = frame.info.tcp
@@ -134,7 +130,7 @@ def _parse_with_pcapkit(file_path: str, max_packets: Optional[int]) -> Generator
                     if sport is None:
                         sport = getattr(tcp_layer, "srcport", None)
                     if sport is not None:
-                        record.source_port = _safe_int(sport)
+                        record_dict["source_port"] = _safe_int(sport)
 
                     dport = getattr(tcp_layer, "destination_port", None)
                     if dport is None:
@@ -142,36 +138,36 @@ def _parse_with_pcapkit(file_path: str, max_packets: Optional[int]) -> Generator
                     if dport is None:
                         dport = getattr(tcp_layer, "dstport", None)
                     if dport is not None:
-                        record.destination_port = _safe_int(dport)
+                        record_dict["destination_port"] = _safe_int(dport)
 
                     flags = getattr(tcp_layer, "flags", None)
                     if flags is not None:
-                        record.tcp_flags_syn = getattr(flags, "syn", None)
-                        record.tcp_flags_ack = getattr(flags, "ack", None)
-                        record.tcp_flags_fin = getattr(flags, "fin", None)
-                        record.tcp_flags_rst = getattr(flags, "rst", None)
-                        record.tcp_flags_psh = getattr(flags, "psh", None)
-                        record.tcp_flags_urg = getattr(flags, "urg", None)
+                        record_dict["tcp_flags_syn"] = getattr(flags, "syn", None)
+                        record_dict["tcp_flags_ack"] = getattr(flags, "ack", None)
+                        record_dict["tcp_flags_fin"] = getattr(flags, "fin", None)
+                        record_dict["tcp_flags_rst"] = getattr(flags, "rst", None)
+                        record_dict["tcp_flags_psh"] = getattr(flags, "psh", None)
+                        record_dict["tcp_flags_urg"] = getattr(flags, "urg", None)
 
                     seq_num = getattr(tcp_layer, "sequence_number", None)
                     if seq_num is None:
                         seq_num = getattr(tcp_layer, "seq", None)
                     if seq_num is not None:
-                        record.tcp_sequence_number = _safe_int(seq_num)
+                        record_dict["tcp_sequence_number"] = _safe_int(seq_num)
 
                     ack_num = getattr(tcp_layer, "acknowledgment_number", None)
                     if ack_num is None:
                         ack_num = getattr(tcp_layer, "ack", None)
                     if ack_num is not None:
-                        record.tcp_acknowledgment_number = _safe_int(ack_num)
+                        record_dict["tcp_acknowledgment_number"] = _safe_int(ack_num)
 
                     win_size = getattr(tcp_layer, "window_size", None)
                     if win_size is None:
                         win_size = getattr(tcp_layer, "window", None)
                     if win_size is not None:
-                        record.tcp_window_size = _safe_int(win_size)
+                        record_dict["tcp_window_size"] = _safe_int(win_size)
 
-            elif record.protocol == "UDP":
+            elif record_dict.get("protocol") == "UDP":
                 udp_layer = None
                 if hasattr(frame.info, "udp"):
                     udp_layer = frame.info.udp
@@ -185,7 +181,7 @@ def _parse_with_pcapkit(file_path: str, max_packets: Optional[int]) -> Generator
                     if sport is None:
                         sport = getattr(udp_layer, "srcport", None)
                     if sport is not None:
-                        record.source_port = _safe_int(sport)
+                        record_dict["source_port"] = _safe_int(sport)
 
                     dport = getattr(udp_layer, "destination_port", None)
                     if dport is None:
@@ -193,9 +189,9 @@ def _parse_with_pcapkit(file_path: str, max_packets: Optional[int]) -> Generator
                     if dport is None:
                         dport = getattr(udp_layer, "dstport", None)
                     if dport is not None:
-                        record.destination_port = _safe_int(dport)
+                        record_dict["destination_port"] = _safe_int(dport)
 
-            elif record.protocol == "ICMP":
+            elif record_dict.get("protocol") == "ICMP":
                 icmp_layer = (
                     getattr(frame.info, "icmpv4", None)
                     or getattr(frame.info, "icmp", None)
@@ -205,22 +201,28 @@ def _parse_with_pcapkit(file_path: str, max_packets: Optional[int]) -> Generator
                     icmp_type = getattr(msg, "type", None)
                     icmp_code = getattr(msg, "code", None)
                     if icmp_type is not None:
-                        record.icmp_type = _safe_int(icmp_type)
+                        record_dict["icmp_type"] = _safe_int(icmp_type)
                     if icmp_code is not None:
-                        record.icmp_code = _safe_int(icmp_code)
+                        record_dict["icmp_code"] = _safe_int(icmp_code)
 
-            elif record.protocol == "ICMPv6":
+            elif record_dict.get("protocol") == "ICMPv6":
                 icmp6_layer = getattr(frame.info, "icmpv6", None)
                 if icmp6_layer is not None:
                     msg = getattr(icmp6_layer, "message", icmp6_layer)
                     icmp_type = getattr(msg, "type", None)
                     icmp_code = getattr(msg, "code", None)
                     if icmp_type is not None:
-                        record.icmp_type = _safe_int(icmp_type)
+                        record_dict["icmp_type"] = _safe_int(icmp_type)
                     if icmp_code is not None:
-                        record.icmp_code = _safe_int(icmp_code)
+                        record_dict["icmp_code"] = _safe_int(icmp_code)
 
-            yield record
+            # Use a simple object to pass to the factory method because it expects attribute access
+            class AttrDict(dict):
+                def __init__(self, *args, **kwargs):
+                    super(AttrDict, self).__init__(*args, **kwargs)
+                    self.__dict__ = self
+
+            yield PcapRecord.from_parser_row(AttrDict(record_dict))
 
             generated_records += 1
             if max_packets is not None and generated_records >= max_packets:

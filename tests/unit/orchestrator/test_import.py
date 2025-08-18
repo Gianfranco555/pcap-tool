@@ -7,4 +7,4 @@ def test_import_orchestrator():
     try:
         import pcap_tool.orchestrator
     except ImportError as e:
-    import pcap_tool.orchestrator
+        pytest.fail(f"Failed to import orchestrator: {e}")
