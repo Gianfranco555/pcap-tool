@@ -158,7 +158,9 @@ class PcapRecord:
                         value = default
                 except (TypeError, ValueError):
                         # pd.isna can raise TypeError for some types, assume not NA.
-                        pass
+                except (TypeError, ValueError) as e:
+                        # pd.isna can raise TypeError for some types, assume not NA.
+                        logging.debug(f"pd.isna raised {type(e).__name__} for value {value!r}: {e}")
                 # Only check for NaN/NA for types where it makes sense
                 if isinstance(value, (float, str)) or (hasattr(value, "__array__") or hasattr(value, "__float__")):
                     if pd.isna(value):  # handles NaN and pandas.NA
