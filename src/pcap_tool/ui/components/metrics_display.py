@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from pcap_tool.analyze import ErrorSummarizer, SecurityAuditor
+from pcap_tool.analysis import ErrorSummarizer, SecurityAuditor
 from pcap_tool.enrichment import Enricher
 from pcap_tool.metrics.retransmission import categorize_retransmission_severity
 from pcap_tool.utils import render_status_pill

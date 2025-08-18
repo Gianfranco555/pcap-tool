@@ -14,7 +14,7 @@ from .metrics.flow_table import FlowTable
 from .metrics.stats_collector import StatsCollector
 from .metrics.timeline_builder import TimelineBuilder
 from .enrich.service_guesser import guess_service
-from .analyze import PerformanceAnalyzer, ErrorSummarizer, SecurityAuditor
+from .analysis import PerformanceAnalyzer, ErrorSummarizer, SecurityAuditor
 from pcap_tool.heuristics.engine import HeuristicEngine
 from pcap_tool.heuristics.metrics import count_tls_versions
 from .core.config import settings

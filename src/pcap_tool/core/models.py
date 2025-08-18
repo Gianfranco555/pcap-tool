@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, fields
+from dataclasses import MISSING, dataclass, field, fields
 from datetime import datetime
 from typing import Any, List, Optional, Union, get_args, get_origin, get_type_hints
 import pandas as pd
@@ -156,8 +156,9 @@ class PcapRecord:
                 try:
                     if pd.isna(value):  # handles NaN and pandas.NA
                         value = default
-                except TypeError:
-                    # pd.isna can raise TypeError for some types, assume not NA.
+                except (TypeError, ValueError):
+                        # pd.isna can raise TypeError for some types, assume not NA.
+                        pass
                 # Only check for NaN/NA for types where it makes sense
                 if isinstance(value, (float, str)) or (hasattr(value, "__array__") or hasattr(value, "__float__")):
                     if pd.isna(value):  # handles NaN and pandas.NA

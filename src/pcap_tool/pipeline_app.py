@@ -11,7 +11,7 @@ import pandas as pd
 from .core.models import PcapRecord
 from .enrichment import Enricher
 from .enrich import service_guesser
-from .analyze import ErrorSummarizer, SecurityAuditor
+from .analysis import ErrorSummarizer, SecurityAuditor
 from .metrics_builder import MetricsBuilder
 from pcap_tool.heuristics.engine import HeuristicEngine, VectorisedHeuristicEngine
 from .llm_summarizer import LLMSummarizer
