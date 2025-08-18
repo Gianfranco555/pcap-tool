@@ -188,7 +188,7 @@ class PcapRecord:
             tcp_options_mss=to_int(getattr(row, 'tcp_options_mss', 0)),
             tcp_options_sack_permitted=to_bool(getattr(row, 'tcp_options_sack_permitted', False)),
             tcp_options_window_scale=to_int(getattr(row, 'tcp_options_window_scale', 0)),
-            tcp_stream_index=to_int(getattr(row, 'tcp_stream_index', None), default=-1),
+            tcp_stream_index=to_int(getattr(row, 'tcp_stream_index', None), default=0),
             is_src_client=to_bool(getattr(row, 'is_src_client', False)),
             is_source_client=to_bool(getattr(row, 'is_source_client', False)),
             tcp_analysis_retransmission_flags=to_list(getattr(row, 'tcp_analysis_retransmission_flags', [])),
