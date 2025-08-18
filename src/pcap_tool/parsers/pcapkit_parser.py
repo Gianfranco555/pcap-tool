@@ -222,7 +222,7 @@ def _parse_with_pcapkit(file_path: str, max_packets: Optional[int]) -> Generator
                     if icmp_code is not None:
                         record.icmp_code = _safe_int(icmp_code)
 
-            yield PcapRecord.from_parser_row(asdict(record))
+            yield record
 
             generated_records += 1
             if max_packets is not None and generated_records >= max_packets:
