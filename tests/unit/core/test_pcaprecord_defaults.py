@@ -13,7 +13,11 @@ class AttrDict(dict):
 
 def test_from_parser_row_handles_missing_fields():
     """Tests that the factory method provides defaults for missing fields."""
-    row = AttrDict({})
+import types
+
+def test_from_parser_row_handles_missing_fields():
+    """Tests that the factory method provides defaults for missing fields."""
+    row = types.SimpleNamespace()
     record = PcapRecord.from_parser_row(row)
     assert record.frame_number == 0
     assert record.source_ip == ""
