@@ -191,6 +191,8 @@ class Flow:
             server_ip, server_port = first.destination_ip, first.destination_port
             client_is_src = True
         else:  # ports are equal – direction unknown
+            # When ports are equal, we cannot determine client/server roles.
+            # The assignment below is arbitrary; client_is_src is set to None to indicate ambiguity.
             client_ip, client_port = first.source_ip, first.source_port
             server_ip, server_port = first.destination_ip, first.destination_port
             client_is_src = None
