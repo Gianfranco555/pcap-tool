@@ -157,7 +157,8 @@ class PcapRecord:
                     if pd.isna(value):  # handles NaN and pandas.NA
                         value = default
                 except (TypeError, ValueError):
-                        # pd.isna can raise TypeError for some types, assume not NA.
+                        # Intentionally ignore TypeError/ValueError from pd.isna for unsupported types.
+                        # In such cases, we assume the value is not NA and proceed.
                 except (TypeError, ValueError) as e:
                         # pd.isna can raise TypeError for some types, assume not NA.
                         logging.debug(f"pd.isna raised {type(e).__name__} for value {value!r}: {e}")
