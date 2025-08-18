@@ -220,7 +220,7 @@ class PySharkParser(BaseParser):
             data = proc.process_packet(extractor, record)
             for key, value in data.items():
                 setattr(record, key, value)
-        return PcapRecord.from_parser_row(asdict(record))
+        return record
 
     def _extract_layer_data(self, ext: PacketExtractor, record: PcapRecord) -> None:
         """Populate L2/L3/L4 fields on ``record``."""
