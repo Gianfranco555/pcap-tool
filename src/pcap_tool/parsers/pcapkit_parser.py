@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Generator, Optional
 
 from pcap_tool.logging import get_logger
+from dataclasses import asdict
 from ..core.models import PcapRecord
 from .base import BaseParser
 from .utils import _safe_int
@@ -64,11 +65,12 @@ def _parse_with_pcapkit(file_path: str, max_packets: Optional[int]) -> Generator
             timestamp = float(getattr(frame.info, "time_epoch", 0.0))
             length = getattr(frame.info, "cap_len", None)
 
-            record = PcapRecord(
-                frame_number=packet_count,
-                timestamp=timestamp,
-                packet_length=length,
-            )
+            row = {
+                "frame_number": packet_count,
+                "timestamp": timestamp,
+                "packet_length": length,
+            }
+            record = PcapRecord.from_parser_row(row)
 
             eth = getattr(frame.info, "ethernet", None)
             ip_layer = None

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Generator, Optional, TYPE_CHECKING
+from dataclasses import asdict
 
 from pcap_tool.logging import get_logger
 from ..core.models import PcapRecord
@@ -207,7 +208,12 @@ class PySharkParser(BaseParser):
 
         ts = float(packet.sniff_timestamp)
         frame_number = _safe_int(packet.number) or 0
-        record = PcapRecord(frame_number=frame_number, timestamp=ts, raw_packet_summary=str(getattr(packet, "highest_layer", "")))
+        row = {
+            "frame_number": frame_number,
+            "timestamp": ts,
+            "raw_packet_summary": str(getattr(packet, "highest_layer", "")),
+        }
+        record = PcapRecord.from_parser_row(row)
         extractor = PacketExtractor(packet)
         self._extract_layer_data(extractor, record)
         for proc in self.processors:
