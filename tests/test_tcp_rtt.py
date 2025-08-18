@@ -32,14 +32,14 @@ def syn_only_pcap(tmp_path: Path) -> Path:
 def test_tcp_rtt_extraction(handshake_pcap: Path):
     df = parse_pcap_to_df(str(handshake_pcap))
     assert "tcp_rtt_ms" in df.columns
-    rtts = df["tcp_rtt_ms"].dropna().tolist()
+    rtts = df[df["tcp_rtt_ms"] > 0]["tcp_rtt_ms"].tolist()
     assert len(rtts) == 1
     assert 999 <= rtts[0] <= 1001
 
 
 def test_syn_without_synack(syn_only_pcap: Path):
     df = parse_pcap_to_df(str(syn_only_pcap))
-    assert df["tcp_rtt_ms"].dropna().empty
+    assert (df["tcp_rtt_ms"] == 0.0).all()
 
 
 def test_compute_tcp_rtt_stats_empty():

@@ -32,111 +32,6 @@ if TYPE_CHECKING:  # pragma: no cover - hint for static analyzers
     from pyshark.packet.packet import Packet as PySharkPacket
 
 
-def _get_pyshark_layer_attribute(layer: Any, attribute_name: str, frame_number_for_log: int, is_flag: bool = False) -> Any:
-    """Helper to safely get an attribute from a pyshark layer."""
-    if not hasattr(layer, attribute_name):
-        return None
-
-    raw_value = getattr(layer, attribute_name)
-
-    if is_flag:
-        bool_val = _safe_str_to_bool(raw_value)
-        if bool_val is None and raw_value is not None:
-            logger.warning(
-                f"Frame {frame_number_for_log}: Could not convert flag '{attribute_name}' with value '{raw_value}' to bool. Using None."
-            )
-        return bool_val
-
-    return raw_value
-
-
-def _extract_sni_pyshark(packet: "pyshark.packet.packet.Packet") -> Optional[str]:
-    logger.debug(f"Frame {packet.number}: Attempting SNI extraction (V_FIXED_ACCESS).")
-    sni_value = None
-    try:
-        if not hasattr(packet, "tls"):
-            return None
-        top_tls_layer = packet.tls
-        if hasattr(top_tls_layer, "_all_fields"):
-            logger.debug(
-                f"Frame {packet.number}: Fields in top_tls_layer (packet.tls): {top_tls_layer._all_fields}"
-            )
-        record_data = None
-        if hasattr(top_tls_layer, "tls_record"):
-            record_data = top_tls_layer.tls_record
-        elif "tls.record" in top_tls_layer.field_names:
-            record_data = top_tls_layer.get_field_value("tls.record")
-        else:
-            if hasattr(top_tls_layer, "tls_handshake"):
-                record_data = top_tls_layer
-        if not record_data:
-            if hasattr(top_tls_layer, "handshake_extensions_server_name"):
-                sni_value = top_tls_layer.handshake_extensions_server_name
-            return sni_value
-        handshake_data = None
-        if hasattr(record_data, "tls_handshake"):
-            handshake_data = record_data.tls_handshake
-        elif "tls.handshake" in record_data.field_names:
-            handshake_data = record_data.get_field_value("tls.handshake")
-        else:
-            return sni_value
-        if not handshake_data:
-            return sni_value
-        extension_data = None
-        if hasattr(handshake_data, "tls_handshake_extension"):
-            extension_data = handshake_data.tls_handshake_extension
-        elif "tls.handshake.extension" in handshake_data.field_names:
-            extension_data = handshake_data.get_field_value("tls.handshake.extension")
-        else:
-            return sni_value
-        if not extension_data:
-            return sni_value
-        extensions_to_check = []
-        if isinstance(extension_data, list):
-            extensions_to_check.extend(extension_data)
-        else:
-            extensions_to_check.append(extension_data)
-        for ext_entry in extensions_to_check:
-            if hasattr(ext_entry, "server_name_indication_extension"):
-                sni_details_obj = ext_entry.server_name_indication_extension
-                if hasattr(sni_details_obj, "extensions_server_name"):
-                    sni_value = sni_details_obj.extensions_server_name
-                    break
-                elif hasattr(sni_details_obj, "tls_handshake_extensions_server_name"):
-                    sni_value = sni_details_obj.tls_handshake_extensions_server_name
-                    break
-        if isinstance(sni_value, list):
-            sni_value = sni_value[0] if sni_value else None
-    except Exception as e:  # pragma: no cover - best effort only
-        logger.error(f"Frame {packet.number}: General exception in _extract_sni_pyshark: {e}", exc_info=True)
-        sni_value = None
-    if sni_value is None:
-        logger.debug(f"Frame {packet.number}: Final SNI extraction resulted in None.")
-    else:
-        logger.info(f"Frame {packet.number}: Final SNI value determined: {sni_value}")
-    return sni_value
-
-
-
-
-class PacketExtractor:
-    """Lightweight helper for extracting fields from a pyshark packet."""
-
-    def __init__(self, packet: "PySharkPacket") -> None:
-        """Store the packet reference.
-
-        The type is annotated as a string so importing this module does not
-        require :mod:`pyshark` to be installed.
-        """
-        self.packet = packet
-
-    def get(self, layer: str, attr: str, frame_number: int, *, is_flag: bool = False) -> Any:
-        if not hasattr(self.packet, layer):
-            return None
-        layer_obj = getattr(self.packet, layer)
-        return _get_pyshark_layer_attribute(layer_obj, attr, frame_number, is_flag)
-
-
 class PySharkParser(BaseParser):
     """Parser implementation using :mod:`pyshark` with helper methods."""
 
@@ -204,48 +99,86 @@ class PySharkParser(BaseParser):
 
     def _packet_to_record(self, packet: "PySharkPacket") -> PcapRecord:
         """Convert a ``pyshark`` packet to :class:`PcapRecord`."""
-
         ts = float(packet.sniff_timestamp)
         frame_number = _safe_int(packet.number) or 0
-        record = PcapRecord(frame_number=frame_number, timestamp=ts, raw_packet_summary=str(getattr(packet, "highest_layer", "")))
+
+        # Create a dictionary of the parsed data
+        row_data = {
+            "frame_number": frame_number,
+            "timestamp": ts,
+            "raw_packet_summary": str(getattr(packet, "highest_layer", "")),
+        }
+
+        # The concept of a PacketExtractor is still useful, so we create it here.
+        # This avoids passing the raw packet to every processor.
+        class PacketExtractor:
+            def __init__(self, packet: "PySharkPacket") -> None:
+                self.packet = packet
+
+            def get(self, layer: str, attr: str, frame_number: int, *, is_flag: bool = False) -> Any:
+                if not hasattr(self.packet, layer):
+                    return None
+                layer_obj = getattr(self.packet, layer)
+                raw_value = getattr(layer_obj, attr, None)
+                if is_flag:
+                    return _safe_str_to_bool(raw_value)
+                return raw_value
         extractor = PacketExtractor(packet)
-        self._extract_layer_data(extractor, record)
+        self._extract_layer_data(packet, row_data)
+
+        # Create a temporary record for processors that might need it for now.
+        # This can be refactored later.
+        temp_record = PcapRecord(**row_data)
+
         for proc in self.processors:
-            data = proc.process_packet(extractor, record)
-            for key, value in data.items():
-                setattr(record, key, value)
-        return record
+            data = proc.process_packet(extractor, temp_record)
+            row_data.update(data)
 
-    def _extract_layer_data(self, ext: PacketExtractor, record: PcapRecord) -> None:
-        """Populate L2/L3/L4 fields on ``record``."""
+        # Use a simple object to pass to the factory method because it expects attribute access
+        class AttrDict(dict):
+            def __init__(self, *args, **kwargs):
+                super(AttrDict, self).__init__(*args, **kwargs)
+                self.__dict__ = self
+        return PcapRecord.from_parser_row(AttrDict(row_data))
 
-        record.packet_length = _safe_int(getattr(ext.packet, "length", None))
+    def _extract_layer_data(self, packet: "PySharkPacket", record_dict: dict[str, Any]) -> None:
+        """Populate L2/L3/L4 fields on ``record_dict``."""
+        record_dict["packet_length"] = _safe_int(getattr(packet, "length", None))
 
-        record.source_mac = ext.get("eth", "src", record.frame_number)
-        record.destination_mac = ext.get("eth", "dst", record.frame_number)
+        if hasattr(packet, "eth"):
+            record_dict["source_mac"] = getattr(packet.eth, "src", None)
+            record_dict["destination_mac"] = getattr(packet.eth, "dst", None)
 
-        if hasattr(ext.packet, "ip"):
-            record.protocol_l3 = "IPv4"
-            record.source_ip = ext.get("ip", "src", record.frame_number)
-            record.destination_ip = ext.get("ip", "dst", record.frame_number)
-            record.ip_ttl = _safe_int(ext.get("ip", "ttl", record.frame_number))
-            record.ip_flags_df = ext.get("ip", "flags_df", record.frame_number, is_flag=True)
-            proto = _safe_int(ext.get("ip", "proto", record.frame_number))
-            record.protocol = {1: "ICMP", 6: "TCP", 17: "UDP", 47: "GRE", 50: "ESP"}.get(proto, str(proto) if proto is not None else None)
-        elif hasattr(ext.packet, "ipv6"):
-            record.protocol_l3 = "IPv6"
-            record.source_ip = ext.get("ipv6", "src", record.frame_number)
-            record.destination_ip = ext.get("ipv6", "dst", record.frame_number)
-            record.ip_ttl = _safe_int(ext.get("ipv6", "hlim", record.frame_number))
-            proto = _safe_int(ext.get("ipv6", "nxt", record.frame_number))
-            record.protocol = {6: "TCP", 17: "UDP", 58: "ICMPv6", 47: "GRE", 50: "ESP"}.get(proto, str(proto) if proto is not None else None)
-        elif hasattr(ext.packet, "arp"):
-            record.protocol_l3 = "ARP"
-            record.arp_opcode = _safe_int(ext.get("arp", "opcode", record.frame_number))
-            record.arp_sender_mac = ext.get("arp", "src_hw_mac", record.frame_number)
-            record.arp_sender_ip = ext.get("arp", "src_proto_ipv4", record.frame_number)
-            record.arp_target_mac = ext.get("arp", "dst_hw_mac", record.frame_number)
-            record.arp_target_ip = ext.get("arp", "dst_proto_ipv4", record.frame_number)
+        # Add L4 port info if available
+        if hasattr(packet, "tcp"):
+            record_dict["source_port"] = _safe_int(getattr(packet.tcp, "srcport", None))
+            record_dict["destination_port"] = _safe_int(getattr(packet.tcp, "dstport", None))
+        elif hasattr(packet, "udp"):
+            record_dict["source_port"] = _safe_int(getattr(packet.udp, "srcport", None))
+            record_dict["destination_port"] = _safe_int(getattr(packet.udp, "dstport", None))
+
+        if hasattr(packet, "ip"):
+            record_dict["protocol_l3"] = "IPv4"
+            record_dict["source_ip"] = getattr(packet.ip, "src", None)
+            record_dict["destination_ip"] = getattr(packet.ip, "dst", None)
+            record_dict["ip_ttl"] = _safe_int(getattr(packet.ip, "ttl", None))
+            record_dict["ip_flags_df"] = _safe_str_to_bool(getattr(packet.ip, "flags_df", "0"))
+            proto = _safe_int(getattr(packet.ip, "proto", None))
+            record_dict["protocol"] = {1: "ICMP", 6: "TCP", 17: "UDP", 47: "GRE", 50: "ESP"}.get(proto, str(proto) if proto is not None else None)
+        elif hasattr(packet, "ipv6"):
+            record_dict["protocol_l3"] = "IPv6"
+            record_dict["source_ip"] = getattr(packet.ipv6, "src", None)
+            record_dict["destination_ip"] = getattr(packet.ipv6, "dst", None)
+            record_dict["ip_ttl"] = _safe_int(getattr(packet.ipv6, "hlim", None))
+            proto = _safe_int(getattr(packet.ipv6, "nxt", None))
+            record_dict["protocol"] = {6: "TCP", 17: "UDP", 58: "ICMPv6", 47: "GRE", 50: "ESP"}.get(proto, str(proto) if proto is not None else None)
+        elif hasattr(packet, "arp"):
+            record_dict["protocol_l3"] = "ARP"
+            record_dict["arp_opcode"] = _safe_int(getattr(packet.arp, "opcode", None))
+            record_dict["arp_sender_mac"] = getattr(packet.arp, "src_hw_mac", None)
+            record_dict["arp_sender_ip"] = getattr(packet.arp, "src_proto_ipv4", None)
+            record_dict["arp_target_mac"] = getattr(packet.arp, "dst_hw_mac", None)
+            record_dict["arp_target_ip"] = getattr(packet.arp, "dst_proto_ipv4", None)
 
 
     @handle_parse_errors

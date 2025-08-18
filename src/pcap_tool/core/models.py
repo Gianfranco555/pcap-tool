@@ -6,127 +6,245 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, List, Optional
 import pandas as pd
-
-
-def _safe_int(value: Any) -> Optional[int]:
-    """Safely convert numbers that may contain commas to ``int``."""
-
-    try:
-        return int(str(value).replace(",", ""))
-    except (TypeError, ValueError):
-        return None
+import math
 
 
 @dataclass
 class PcapRecord:
-    frame_number: int
-    timestamp: float
-    source_ip: Optional[str] = None
-    destination_ip: Optional[str] = None
-    source_port: Optional[int] = None
-    destination_port: Optional[int] = None
-    protocol: Optional[str] = None
-    sni: Optional[str] = None
-    raw_packet_summary: Optional[str] = None
-    source_mac: Optional[str] = None
-    destination_mac: Optional[str] = None
-    protocol_l3: Optional[str] = None
-    packet_length: Optional[int] = None
-    ip_ttl: Optional[int] = None
-    ip_flags_df: Optional[bool] = None
-    ip_id: Optional[str] = None
-    dscp_value: Optional[int] = None
-    tcp_flags_syn: Optional[bool] = None
-    tcp_flags_ack: Optional[bool] = None
-    tcp_flags_fin: Optional[bool] = None
-    tcp_flags_rst: Optional[bool] = None
-    tcp_flags_psh: Optional[bool] = None
-    tcp_flags_urg: Optional[bool] = None
-    tcp_flags_ece: Optional[bool] = None
-    tcp_flags_cwr: Optional[bool] = None
-    tcp_sequence_number: Optional[int] = None
-    tcp_acknowledgment_number: Optional[int] = None
-    tcp_window_size: Optional[int] = None
-    tcp_options_mss: Optional[int] = None
-    tcp_options_sack_permitted: Optional[bool] = None
-    tcp_options_window_scale: Optional[int] = None
-    tcp_stream_index: Optional[int] = None
-    is_src_client: Optional[bool] = None
-    is_source_client: Optional[bool] = None
+    frame_number: int = 0
+    timestamp: float = 0.0
+    source_ip: str = ""
+    destination_ip: str = ""
+    source_port: int = 0
+    destination_port: int = 0
+    protocol: str = ""
+    sni: str = ""
+    raw_packet_summary: str = ""
+    source_mac: str = ""
+    destination_mac: str = ""
+    protocol_l3: str = ""
+    packet_length: int = 0
+    ip_ttl: int = 0
+    ip_flags_df: bool = False
+    ip_id: str = ""
+    dscp_value: int = 0
+    tcp_flags_syn: bool = False
+    tcp_flags_ack: bool = False
+    tcp_flags_fin: bool = False
+    tcp_flags_rst: bool = False
+    tcp_flags_psh: bool = False
+    tcp_flags_urg: bool = False
+    tcp_flags_ece: bool = False
+    tcp_flags_cwr: bool = False
+    tcp_sequence_number: int = 0
+    tcp_acknowledgment_number: int = 0
+    tcp_window_size: int = 0
+    tcp_options_mss: int = 0
+    tcp_options_sack_permitted: bool = False
+    tcp_options_window_scale: int = 0
+    tcp_stream_index: int = 0
+    is_src_client: bool = False
+    is_source_client: bool = False
     tcp_analysis_retransmission_flags: List[str] = field(default_factory=list)
     tcp_analysis_duplicate_ack_flags: List[str] = field(default_factory=list)
     tcp_analysis_out_of_order_flags: List[str] = field(default_factory=list)
     tcp_analysis_window_flags: List[str] = field(default_factory=list)
-    dup_ack_num: Optional[int] = None
-    adv_window: Optional[int] = None
-    tcp_rtt_ms: Optional[float] = None
-    tls_handshake_type: Optional[str] = None
-    tls_handshake_version: Optional[str] = None
-    tls_record_version: Optional[str] = None
-    tls_cipher_suites_offered: Optional[List[str]] = None
-    tls_cipher_suite_selected: Optional[str] = None
-    tls_alert_message_description: Optional[str] = None
-    tls_alert_level: Optional[str] = None
-    tls_effective_version: Optional[str] = None
+    dup_ack_num: int = 0
+    adv_window: int = 0
+    tcp_rtt_ms: float = 0.0
+    tls_handshake_type: str = ""
+    tls_handshake_version: str = ""
+    tls_record_version: str = ""
+    tls_cipher_suites_offered: List[str] = field(default_factory=list)
+    tls_cipher_suite_selected: str = ""
+    tls_alert_message_description: str = ""
+    tls_alert_level: str = ""
+    tls_effective_version: str = ""
     # ── TLS certificate metadata ─────────────────────────────────────────
-    tls_cert_subject_cn: Optional[str] = None
-    tls_cert_san_dns: Optional[List[str]] = None  # list of DNS SANs
-    tls_cert_san_ip: Optional[List[str]] = None   # list of IP SANs
-    tls_cert_issuer_cn: Optional[str] = None
-    tls_cert_serial_number: Optional[str] = None
+    tls_cert_subject_cn: str = ""
+    tls_cert_san_dns: List[str] = field(default_factory=list)
+    tls_cert_san_ip: List[str] = field(default_factory=list)
+    tls_cert_issuer_cn: str = ""
+    tls_cert_serial_number: str = ""
     tls_cert_not_before: Optional[datetime] = None
     tls_cert_not_after: Optional[datetime] = None
-    tls_cert_sig_alg: Optional[str] = None
-    tls_cert_key_length: Optional[int] = None
-    tls_cert_is_self_signed: Optional[bool] = None
-    dns_query_name: Optional[str] = None
-    dns_query_type: Optional[str] = None
-    dns_response_code: Optional[str] = None
-    dns_response_addresses: Optional[List[str]] = None
-    dns_response_cname_target: Optional[str] = None
-    http_request_method: Optional[str] = None
-    http_request_uri: Optional[str] = None
-    http_request_host_header: Optional[str] = None
-    http_response_code: Optional[int] = None
-    http_response_location_header: Optional[str] = None
-    http_x_forwarded_for_header: Optional[str] = None
-    icmp_type: Optional[int] = None
-    icmp_code: Optional[int] = None
-    icmp_fragmentation_needed_original_mtu: Optional[int] = None
-    arp_opcode: Optional[int] = None
-    arp_sender_mac: Optional[str] = None
-    arp_sender_ip: Optional[str] = None
-    arp_target_mac: Optional[str] = None
-    arp_target_ip: Optional[str] = None
-    dhcp_message_type: Optional[str] = None
-    gre_protocol: Optional[str] = None
-    esp_spi: Optional[str] = None
-    quic_initial_packet_present: Optional[bool] = None
-    is_quic: Optional[bool] = None
-    is_zscaler_ip: Optional[bool] = None
-    is_zpa_synthetic_ip: Optional[bool] = None
-    ssl_inspection_active: Optional[bool] = None
-    zscaler_policy_block_type: Optional[str] = None
+    tls_cert_sig_alg: str = ""
+    tls_cert_key_length: int = 0
+    tls_cert_is_self_signed: bool = False
+    dns_query_name: str = ""
+    dns_query_type: str = ""
+    dns_response_code: str = ""
+    dns_response_addresses: List[str] = field(default_factory=list)
+    dns_response_cname_target: str = ""
+    http_request_method: str = ""
+    http_request_uri: str = ""
+    http_request_host_header: str = ""
+    http_response_code: int = 0
+    http_response_location_header: str = ""
+    http_x_forwarded_for_header: str = ""
+    icmp_type: int = 0
+    icmp_code: int = 0
+    icmp_fragmentation_needed_original_mtu: int = 0
+    arp_opcode: int = 0
+    arp_sender_mac: str = ""
+    arp_sender_ip: str = ""
+    arp_target_mac: str = ""
+    arp_target_ip: str = ""
+    dhcp_message_type: str = ""
+    gre_protocol: str = ""
+    esp_spi: str = ""
+    quic_initial_packet_present: bool = False
+    is_quic: bool = False
+    is_zscaler_ip: bool = False
+    is_zpa_synthetic_ip: bool = False
+    ssl_inspection_active: bool = False
+    zscaler_policy_block_type: str = ""
 
-    def __post_init__(self) -> None:
-        """Normalize key fields for consistency."""
+    @classmethod
+    def from_parser_row(cls, row: Any) -> "PcapRecord":
+        """
+        Factory method to create a PcapRecord from a parser row,
+        safely handling missing data, NaNs, and incorrect types.
+        """
+        def to_int(value: Any, default: int = 0) -> int:
+            if value is None or (isinstance(value, float) and pd.isna(value)):
+                return default
+            try:
+                return int(str(value).replace(",", ""))
+            except (ValueError, TypeError):
+                return default
 
-        try:
-            self.frame_number = int(self.frame_number)
-        except (TypeError, ValueError):
-            self.frame_number = 0
-        try:
-            self.timestamp = float(self.timestamp)
-        except (TypeError, ValueError):
-            self.timestamp = 0.0
+        def to_float(value: Any) -> float:
+            if value is None or (isinstance(value, float) and pd.isna(value)):
+                return 0.0
+            try:
+                return float(value)
+            except (ValueError, TypeError):
+                return 0.0
 
-        if isinstance(self.source_port, str):
-            self.source_port = _safe_int(self.source_port)
-        if isinstance(self.destination_port, str):
-            self.destination_port = _safe_int(self.destination_port)
+        def to_str(value: Any) -> str:
+            if value is None or (isinstance(value, float) and pd.isna(value)):
+                return ""
+            return str(value)
 
-        if isinstance(self.tcp_stream_index, str):
-            self.tcp_stream_index = _safe_int(self.tcp_stream_index)
+        def to_bool(value: Any) -> bool:
+            if value is None or (isinstance(value, float) and pd.isna(value)):
+                return False
+            if isinstance(value, str):
+                return value.lower().strip() in ('true', '1', 't', 'y', 'yes')
+            return bool(value)
+
+        def to_list(value: Any) -> list:
+            if value is None or (isinstance(value, float) and pd.isna(value)):
+                return []
+            if isinstance(value, (list, set, tuple)):
+                return list(value)
+            return []
+
+        def to_datetime(value: Any) -> Optional[datetime]:
+            if value is None or (isinstance(value, float) and pd.isna(value)):
+                return None
+            try:
+                # pyshark can return datetime strings with weird timezones like 'UTC-5'
+                # which pandas struggles with. We can strip them for now.
+                if isinstance(value, str) and ('UTC' in value or 'GMT' in value):
+                    value = value.split(" (")[0]
+                dt = pd.to_datetime(value)
+                if pd.isna(dt):
+                    return None
+                return dt
+            except (ValueError, TypeError):
+                return None
+
+        return cls(
+            frame_number=to_int(getattr(row, 'frame_number', 0)),
+            timestamp=to_float(getattr(row, 'timestamp', 0.0)),
+            source_ip=to_str(getattr(row, 'source_ip', "")),
+            destination_ip=to_str(getattr(row, 'destination_ip', "")),
+            source_port=to_int(getattr(row, 'source_port', 0)),
+            destination_port=to_int(getattr(row, 'destination_port', 0)),
+            protocol=to_str(getattr(row, 'protocol', "")),
+            sni=to_str(getattr(row, 'sni', "")),
+            raw_packet_summary=to_str(getattr(row, 'raw_packet_summary', "")),
+            source_mac=to_str(getattr(row, 'source_mac', "")),
+            destination_mac=to_str(getattr(row, 'destination_mac', "")),
+            protocol_l3=to_str(getattr(row, 'protocol_l3', "")),
+            packet_length=to_int(getattr(row, 'packet_length', 0)),
+            ip_ttl=to_int(getattr(row, 'ip_ttl', 0)),
+            ip_flags_df=to_bool(getattr(row, 'ip_flags_df', False)),
+            ip_id=to_str(getattr(row, 'ip_id', "")),
+            dscp_value=to_int(getattr(row, 'dscp_value', 0)),
+            tcp_flags_syn=to_bool(getattr(row, 'tcp_flags_syn', False)),
+            tcp_flags_ack=to_bool(getattr(row, 'tcp_flags_ack', False)),
+            tcp_flags_fin=to_bool(getattr(row, 'tcp_flags_fin', False)),
+            tcp_flags_rst=to_bool(getattr(row, 'tcp_flags_rst', False)),
+            tcp_flags_psh=to_bool(getattr(row, 'tcp_flags_psh', False)),
+            tcp_flags_urg=to_bool(getattr(row, 'tcp_flags_urg', False)),
+            tcp_flags_ece=to_bool(getattr(row, 'tcp_flags_ece', False)),
+            tcp_flags_cwr=to_bool(getattr(row, 'tcp_flags_cwr', False)),
+            tcp_sequence_number=to_int(getattr(row, 'tcp_sequence_number', 0)),
+            tcp_acknowledgment_number=to_int(getattr(row, 'tcp_acknowledgment_number', 0)),
+            tcp_window_size=to_int(getattr(row, 'tcp_window_size', 0)),
+            tcp_options_mss=to_int(getattr(row, 'tcp_options_mss', 0)),
+            tcp_options_sack_permitted=to_bool(getattr(row, 'tcp_options_sack_permitted', False)),
+            tcp_options_window_scale=to_int(getattr(row, 'tcp_options_window_scale', 0)),
+            tcp_stream_index=to_int(getattr(row, 'tcp_stream_index', None), default=0),
+            is_src_client=to_bool(getattr(row, 'is_src_client', False)),
+            is_source_client=to_bool(getattr(row, 'is_source_client', False)),
+            tcp_analysis_retransmission_flags=to_list(getattr(row, 'tcp_analysis_retransmission_flags', [])),
+            tcp_analysis_duplicate_ack_flags=to_list(getattr(row, 'tcp_analysis_duplicate_ack_flags', [])),
+            tcp_analysis_out_of_order_flags=to_list(getattr(row, 'tcp_analysis_out_of_order_flags', [])),
+            tcp_analysis_window_flags=to_list(getattr(row, 'tcp_analysis_window_flags', [])),
+            dup_ack_num=to_int(getattr(row, 'dup_ack_num', 0)),
+            adv_window=to_int(getattr(row, 'adv_window', 0)),
+            tcp_rtt_ms=to_float(getattr(row, 'tcp_rtt_ms', 0.0)),
+            tls_handshake_type=to_str(getattr(row, 'tls_handshake_type', "")),
+            tls_handshake_version=to_str(getattr(row, 'tls_handshake_version', "")),
+            tls_record_version=to_str(getattr(row, 'tls_record_version', "")),
+            tls_cipher_suites_offered=to_list(getattr(row, 'tls_cipher_suites_offered', [])),
+            tls_cipher_suite_selected=to_str(getattr(row, 'tls_cipher_suite_selected', "")),
+            tls_alert_message_description=to_str(getattr(row, 'tls_alert_message_description', "")),
+            tls_alert_level=to_str(getattr(row, 'tls_alert_level', "")),
+            tls_effective_version=to_str(getattr(row, 'tls_effective_version', "")),
+            tls_cert_subject_cn=to_str(getattr(row, 'tls_cert_subject_cn', "")),
+            tls_cert_san_dns=to_list(getattr(row, 'tls_cert_san_dns', [])),
+            tls_cert_san_ip=to_list(getattr(row, 'tls_cert_san_ip', [])),
+            tls_cert_issuer_cn=to_str(getattr(row, 'tls_cert_issuer_cn', "")),
+            tls_cert_serial_number=to_str(getattr(row, 'tls_cert_serial_number', "")),
+            tls_cert_not_before=to_datetime(getattr(row, 'tls_cert_not_before', None)),
+            tls_cert_not_after=to_datetime(getattr(row, 'tls_cert_not_after', None)),
+            tls_cert_sig_alg=to_str(getattr(row, 'tls_cert_sig_alg', "")),
+            tls_cert_key_length=to_int(getattr(row, 'tls_cert_key_length', 0)),
+            tls_cert_is_self_signed=to_bool(getattr(row, 'tls_cert_is_self_signed', False)),
+            dns_query_name=to_str(getattr(row, 'dns_query_name', "")),
+            dns_query_type=to_str(getattr(row, 'dns_query_type', "")),
+            dns_response_code=to_str(getattr(row, 'dns_response_code', "")),
+            dns_response_addresses=to_list(getattr(row, 'dns_response_addresses', [])),
+            dns_response_cname_target=to_str(getattr(row, 'dns_response_cname_target', "")),
+            http_request_method=to_str(getattr(row, 'http_request_method', "")),
+            http_request_uri=to_str(getattr(row, 'http_request_uri', "")),
+            http_request_host_header=to_str(getattr(row, 'http_request_host_header', "")),
+            http_response_code=to_int(getattr(row, 'http_response_code', 0)),
+            http_response_location_header=to_str(getattr(row, 'http_response_location_header', "")),
+            http_x_forwarded_for_header=to_str(getattr(row, 'http_x_forwarded_for_header', "")),
+            icmp_type=to_int(getattr(row, 'icmp_type', 0)),
+            icmp_code=to_int(getattr(row, 'icmp_code', 0)),
+            icmp_fragmentation_needed_original_mtu=to_int(getattr(row, 'icmp_fragmentation_needed_original_mtu', 0)),
+            arp_opcode=to_int(getattr(row, 'arp_opcode', 0)),
+            arp_sender_mac=to_str(getattr(row, 'arp_sender_mac', "")),
+            arp_sender_ip=to_str(getattr(row, 'arp_sender_ip', "")),
+            arp_target_mac=to_str(getattr(row, 'arp_target_mac', "")),
+            arp_target_ip=to_str(getattr(row, 'arp_target_ip', "")),
+            dhcp_message_type=to_str(getattr(row, 'dhcp_message_type', "")),
+            gre_protocol=to_str(getattr(row, 'gre_protocol', "")),
+            esp_spi=to_str(getattr(row, 'esp_spi', "")),
+            quic_initial_packet_present=to_bool(getattr(row, 'quic_initial_packet_present', False)),
+            is_quic=to_bool(getattr(row, 'is_quic', False)),
+            is_zscaler_ip=to_bool(getattr(row, 'is_zscaler_ip', False)),
+            is_zpa_synthetic_ip=to_bool(getattr(row, 'is_zpa_synthetic_ip', False)),
+            ssl_inspection_active=to_bool(getattr(row, 'ssl_inspection_active', False)),
+            zscaler_policy_block_type=to_str(getattr(row, 'zscaler_policy_block_type', "")),
+        )
 
     def __str__(self) -> str:
         # ... (previous __str__ content, potentially updated for new fields) ...

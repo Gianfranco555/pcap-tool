@@ -36,7 +36,7 @@ class FlowCache:
         stream_index: int | None,
         frame_number: int,
     ) -> str:
-        if stream_index is not None:
+        if stream_index is not None and stream_index > -1:
             return f"TCP_STREAM_{stream_index}"
         if src_ip and dst_ip and proto:
             props = sorted([(src_ip, src_port), (dst_ip, dst_port)])
