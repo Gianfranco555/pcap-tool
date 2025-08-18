@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import MISSING, dataclass, field, fields
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Union, get_args, get_origin, get_type_hints
 import pandas as pd
 
 
@@ -19,94 +19,169 @@ def _safe_int(value: Any) -> Optional[int]:
 
 @dataclass
 class PcapRecord:
-    frame_number: int
-    timestamp: float
-    source_ip: Optional[str] = None
-    destination_ip: Optional[str] = None
-    source_port: Optional[int] = None
-    destination_port: Optional[int] = None
-    protocol: Optional[str] = None
-    sni: Optional[str] = None
-    raw_packet_summary: Optional[str] = None
-    source_mac: Optional[str] = None
-    destination_mac: Optional[str] = None
-    protocol_l3: Optional[str] = None
-    packet_length: Optional[int] = None
-    ip_ttl: Optional[int] = None
-    ip_flags_df: Optional[bool] = None
-    ip_id: Optional[str] = None
-    dscp_value: Optional[int] = None
-    tcp_flags_syn: Optional[bool] = None
-    tcp_flags_ack: Optional[bool] = None
-    tcp_flags_fin: Optional[bool] = None
-    tcp_flags_rst: Optional[bool] = None
-    tcp_flags_psh: Optional[bool] = None
-    tcp_flags_urg: Optional[bool] = None
-    tcp_flags_ece: Optional[bool] = None
-    tcp_flags_cwr: Optional[bool] = None
-    tcp_sequence_number: Optional[int] = None
-    tcp_acknowledgment_number: Optional[int] = None
-    tcp_window_size: Optional[int] = None
-    tcp_options_mss: Optional[int] = None
-    tcp_options_sack_permitted: Optional[bool] = None
-    tcp_options_window_scale: Optional[int] = None
-    tcp_stream_index: Optional[int] = None
-    is_src_client: Optional[bool] = None
-    is_source_client: Optional[bool] = None
+    frame_number: int = 0
+    timestamp: float = 0.0
+    source_ip: str = ""
+    destination_ip: str = ""
+    source_port: int = 0
+    destination_port: int = 0
+    protocol: str = ""
+    sni: str = ""
+    raw_packet_summary: str = ""
+    source_mac: str = ""
+    destination_mac: str = ""
+    protocol_l3: str = ""
+    packet_length: int = 0
+    ip_ttl: int = 0
+    ip_flags_df: bool = False
+    ip_id: str = ""
+    dscp_value: int = 0
+    tcp_flags_syn: bool = False
+    tcp_flags_ack: bool = False
+    tcp_flags_fin: bool = False
+    tcp_flags_rst: bool = False
+    tcp_flags_psh: bool = False
+    tcp_flags_urg: bool = False
+    tcp_flags_ece: bool = False
+    tcp_flags_cwr: bool = False
+    tcp_sequence_number: int = 0
+    tcp_acknowledgment_number: int = 0
+    tcp_window_size: int = 0
+    tcp_options_mss: int = 0
+    tcp_options_sack_permitted: bool = False
+    tcp_options_window_scale: int = 0
+    tcp_stream_index: int = 0
+    is_src_client: bool = False
+    is_source_client: bool = False
     tcp_analysis_retransmission_flags: List[str] = field(default_factory=list)
     tcp_analysis_duplicate_ack_flags: List[str] = field(default_factory=list)
     tcp_analysis_out_of_order_flags: List[str] = field(default_factory=list)
     tcp_analysis_window_flags: List[str] = field(default_factory=list)
-    dup_ack_num: Optional[int] = None
-    adv_window: Optional[int] = None
-    tcp_rtt_ms: Optional[float] = None
-    tls_handshake_type: Optional[str] = None
-    tls_handshake_version: Optional[str] = None
-    tls_record_version: Optional[str] = None
-    tls_cipher_suites_offered: Optional[List[str]] = None
-    tls_cipher_suite_selected: Optional[str] = None
-    tls_alert_message_description: Optional[str] = None
-    tls_alert_level: Optional[str] = None
-    tls_effective_version: Optional[str] = None
+    dup_ack_num: int = 0
+    adv_window: int = 0
+    tcp_rtt_ms: float = 0.0
+    tls_handshake_type: str = ""
+    tls_handshake_version: str = ""
+    tls_record_version: str = ""
+    tls_cipher_suites_offered: List[str] = field(default_factory=list)
+    tls_cipher_suite_selected: str = ""
+    tls_alert_message_description: str = ""
+    tls_alert_level: str = ""
+    tls_effective_version: str = ""
     # ── TLS certificate metadata ─────────────────────────────────────────
-    tls_cert_subject_cn: Optional[str] = None
-    tls_cert_san_dns: Optional[List[str]] = None  # list of DNS SANs
-    tls_cert_san_ip: Optional[List[str]] = None   # list of IP SANs
-    tls_cert_issuer_cn: Optional[str] = None
-    tls_cert_serial_number: Optional[str] = None
+    tls_cert_subject_cn: str = ""
+    tls_cert_san_dns: List[str] = field(default_factory=list)  # list of DNS SANs
+    tls_cert_san_ip: List[str] = field(default_factory=list)   # list of IP SANs
+    tls_cert_issuer_cn: str = ""
+    tls_cert_serial_number: str = ""
     tls_cert_not_before: Optional[datetime] = None
     tls_cert_not_after: Optional[datetime] = None
-    tls_cert_sig_alg: Optional[str] = None
-    tls_cert_key_length: Optional[int] = None
-    tls_cert_is_self_signed: Optional[bool] = None
-    dns_query_name: Optional[str] = None
-    dns_query_type: Optional[str] = None
-    dns_response_code: Optional[str] = None
-    dns_response_addresses: Optional[List[str]] = None
-    dns_response_cname_target: Optional[str] = None
-    http_request_method: Optional[str] = None
-    http_request_uri: Optional[str] = None
-    http_request_host_header: Optional[str] = None
-    http_response_code: Optional[int] = None
-    http_response_location_header: Optional[str] = None
-    http_x_forwarded_for_header: Optional[str] = None
-    icmp_type: Optional[int] = None
-    icmp_code: Optional[int] = None
-    icmp_fragmentation_needed_original_mtu: Optional[int] = None
-    arp_opcode: Optional[int] = None
-    arp_sender_mac: Optional[str] = None
-    arp_sender_ip: Optional[str] = None
-    arp_target_mac: Optional[str] = None
-    arp_target_ip: Optional[str] = None
-    dhcp_message_type: Optional[str] = None
-    gre_protocol: Optional[str] = None
-    esp_spi: Optional[str] = None
-    quic_initial_packet_present: Optional[bool] = None
-    is_quic: Optional[bool] = None
-    is_zscaler_ip: Optional[bool] = None
-    is_zpa_synthetic_ip: Optional[bool] = None
-    ssl_inspection_active: Optional[bool] = None
-    zscaler_policy_block_type: Optional[str] = None
+    tls_cert_sig_alg: str = ""
+    tls_cert_key_length: int = 0
+    tls_cert_is_self_signed: bool = False
+    dns_query_name: str = ""
+    dns_query_type: str = ""
+    dns_response_code: str = ""
+    dns_response_addresses: List[str] = field(default_factory=list)
+    dns_response_cname_target: str = ""
+    http_request_method: str = ""
+    http_request_uri: str = ""
+    http_request_host_header: str = ""
+    http_response_code: int = 0
+    http_response_location_header: str = ""
+    http_x_forwarded_for_header: str = ""
+    icmp_type: int = 0
+    icmp_code: int = 0
+    icmp_fragmentation_needed_original_mtu: int = 0
+    arp_opcode: int = 0
+    arp_sender_mac: str = ""
+    arp_sender_ip: str = ""
+    arp_target_mac: str = ""
+    arp_target_ip: str = ""
+    dhcp_message_type: str = ""
+    gre_protocol: str = ""
+    esp_spi: str = ""
+    quic_initial_packet_present: bool = False
+    is_quic: bool = False
+    is_zscaler_ip: bool = False
+    is_zpa_synthetic_ip: bool = False
+    ssl_inspection_active: bool = False
+    zscaler_policy_block_type: str = ""
+
+    @classmethod
+    def from_parser_row(cls, row: dict[str, Any]) -> "PcapRecord":
+        """Create a :class:`PcapRecord` from a parser ``row``.
+
+        Any missing, ``None`` or NaN values are replaced with the field's
+        default and coerced to the correct type.  This prevents ``NaN`` values
+        from propagating into numeric operations.
+        """
+
+        data: dict[str, Any] = {}
+        type_hints = get_type_hints(cls)
+        for f in fields(cls):
+            hinted = type_hints.get(f.name, f.type)
+            origin = get_origin(hinted)
+            args = get_args(hinted)
+            base_type = hinted
+            if origin in (list, List):
+                base_type = list
+            elif origin is Union and type(None) in args:
+                non_none = [a for a in args if a is not type(None)]
+                if non_none:
+                    base_type = non_none[0]
+
+            if f.default is not MISSING:
+                default = f.default
+            elif f.default_factory is not MISSING:  # type: ignore[attr-defined]
+                default = f.default_factory()  # type: ignore[misc]
+            elif base_type is int:
+                default = 0
+            elif base_type is float:
+                default = 0.0
+            elif base_type is bool:
+                default = False
+            elif base_type is str:
+                default = ""
+            elif base_type is list:
+                default = []
+            else:
+                default = None
+
+            value = row.get(f.name, default)
+
+            if value is None:
+                value = default
+            else:
+                try:
+                    if pd.isna(value):  # handles NaN and pandas.NA
+                        value = default
+                except Exception:
+                    pass
+
+            if base_type in (int,):
+                coerced = _safe_int(value)
+                value = coerced if coerced is not None else default
+            elif base_type is float:
+                try:
+                    value = float(value)
+                except (TypeError, ValueError):
+                    value = default
+            elif base_type is bool:
+                if isinstance(value, str):
+                    value = value.strip().lower() in {"1", "true", "yes"}
+                else:
+                    value = bool(value)
+            elif base_type is str:
+                value = "" if value is None else str(value)
+            elif base_type is list:
+                if value is None:
+                    value = []
+                elif not isinstance(value, list):
+                    value = [value]
+            data[f.name] = value
+
+        return cls(**data)
 
     def __post_init__(self) -> None:
         """Normalize key fields for consistency."""
@@ -122,11 +197,17 @@ class PcapRecord:
 
         if isinstance(self.source_port, str):
             self.source_port = _safe_int(self.source_port)
+        elif isinstance(self.source_port, float) and pd.isna(self.source_port):
+            self.source_port = 0
         if isinstance(self.destination_port, str):
             self.destination_port = _safe_int(self.destination_port)
+        elif isinstance(self.destination_port, float) and pd.isna(self.destination_port):
+            self.destination_port = 0
 
         if isinstance(self.tcp_stream_index, str):
             self.tcp_stream_index = _safe_int(self.tcp_stream_index)
+        elif isinstance(self.tcp_stream_index, float) and pd.isna(self.tcp_stream_index):
+            self.tcp_stream_index = 0
 
     def __str__(self) -> str:
         # ... (previous __str__ content, potentially updated for new fields) ...

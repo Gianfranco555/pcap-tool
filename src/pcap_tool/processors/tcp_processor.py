@@ -76,7 +76,7 @@ class TCPProcessor(PacketProcessor):
         result: Dict[str, Any] = {}
 
         if record.protocol != "TCP" or not hasattr(extractor.packet, "tcp"):
-            if record.protocol == "UDP" and record.destination_port is None:
+            if record.protocol == "UDP" and record.destination_port in (0, None):
                 result["source_port"] = _safe_int(extractor.get("udp", "srcport", record.frame_number))
                 result["destination_port"] = _safe_int(extractor.get("udp", "dstport", record.frame_number))
                 if result.get("destination_port") == 443:

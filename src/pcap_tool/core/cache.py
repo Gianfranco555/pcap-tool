@@ -60,7 +60,7 @@ class FlowCache:
             safe_int_or_default(rec.source_port, 0),
             safe_int_or_default(rec.destination_port, 0),
             rec.protocol or "",
-            getattr(rec, "tcp_stream_index", None),
+            (lambda idx: None if idx == 0 else idx)(getattr(rec, "tcp_stream_index", None)),
             rec.frame_number,
         )
 
