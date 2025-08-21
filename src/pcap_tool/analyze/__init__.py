@@ -1,6 +1,8 @@
 import warnings
 
-from ..analysis import ErrorSummarizer, PerformanceAnalyzer, SecurityAuditor
+from ..analysis.errors import ErrorSummarizer
+from ..analysis.performance import PerformanceAnalyzer
+from ..analysis.security import SecurityAuditor
 
 warnings.warn(
     "The 'pcap_tool.analyze' module is deprecated and will be removed in a future version. "
