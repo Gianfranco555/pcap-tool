@@ -35,6 +35,25 @@ class FlowKey:
     server_port: int
     l4_proto: str
 
+    # Backwards compatible attribute aliases -----------------------------
+    # Older parts of the codebase and tests used ``src_*``/``dst_*`` names.
+    # Expose them as read-only properties to avoid breaking imports.
+    @property
+    def src_ip(self) -> str:  # pragma: no cover - trivial accessors
+        return self.client_ip
+
+    @property
+    def src_port(self) -> int:  # pragma: no cover - trivial accessors
+        return self.client_port
+
+    @property
+    def dst_ip(self) -> str:  # pragma: no cover - trivial accessors
+        return self.server_ip
+
+    @property
+    def dst_port(self) -> int:  # pragma: no cover - trivial accessors
+        return self.server_port
+
 
 # ``FlowId`` is just a type alias for clarity.
 FlowId = str
@@ -107,10 +126,10 @@ class Flow:
         ) = cls._derive_roles(packets_sorted)
 
         key = FlowKey(
-            src_ip=client_ip,
-            src_port=client_port,
-            dst_ip=server_ip,
-            dst_port=server_port,
+            client_ip=client_ip,
+            client_port=client_port,
+            server_ip=server_ip,
+            server_port=server_port,
             l4_proto=proto,
         )
         fid = _build_flow_id(key, start_ts)
