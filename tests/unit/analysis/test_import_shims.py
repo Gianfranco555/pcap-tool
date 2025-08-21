@@ -12,7 +12,9 @@ def test_shim_imports_and_references_are_identical():
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
 
-        # Import from the deprecated path
+        # Reload the module to ensure the warning is triggered
+        import pcap_tool.analyze
+        importlib.reload(pcap_tool.analyze)
         from pcap_tool import analyze as deprecated_analyze
 
         # Check if a DeprecationWarning was issued
