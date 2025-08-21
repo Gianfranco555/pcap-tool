@@ -10,6 +10,7 @@ been idle for longer than the configured timeout.
 """
 
 from dataclasses import dataclass, field
+from heapq import heappop, heappush
 from typing import Dict, Iterable, List, Tuple
 
 from ..core.models import PcapRecord
@@ -22,6 +23,7 @@ from .flow_models import Flow
 
 
 Endpoint = Tuple[str, int]
+StateKey = Tuple[str, Endpoint, Endpoint]
 
 
 @dataclass
@@ -52,7 +54,8 @@ class FlowBuilder:
 
     def __init__(self, timeout_s: float = 60) -> None:
         self.timeout_s = timeout_s
-        self._flows: Dict[Tuple[str, Endpoint, Endpoint], _FlowState] = {}
+        self._flows: Dict[StateKey, _FlowState] = {}
+        self._last_seen_heap: List[Tuple[float, StateKey]] = []
 
     # ------------------------------------------------------------------
     # Public API
@@ -60,6 +63,9 @@ class FlowBuilder:
 
     def observe(self, pkt: PcapRecord) -> Iterable[Flow]:
         """Observe ``pkt`` and yield any flows that completed as a result.
+
+        Packets are expected to be provided in chronological order.  Feeding
+        out‑of‑order timestamps may lead to premature or delayed timeouts.
 
         The returned iterable may contain zero or more ``Flow`` objects.
         Flows can be completed because the current packet closed a TCP
@@ -80,6 +86,7 @@ class FlowBuilder:
 
         state.packets.append(pkt)
         state.last_seen = pkt.timestamp
+        heappush(self._last_seen_heap, (state.last_seen, key))
 
         if pkt.protocol.upper() == "TCP":
             if pkt.tcp_flags_rst:
@@ -109,13 +116,14 @@ class FlowBuilder:
         completed: List[Flow] = []
         for key in list(self._flows.keys()):
             completed.append(self._finalise(key))
+        self._last_seen_heap.clear()
         return completed
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
-    def _key(self, pkt: PcapRecord) -> Tuple[Tuple[str, Endpoint, Endpoint], str]:
+    def _key(self, pkt: PcapRecord) -> Tuple[StateKey, str]:
         """Return a canonical key for ``pkt`` and the packet direction.
 
         The direction is ``'a'`` when the packet's source corresponds to the
@@ -135,7 +143,7 @@ class FlowBuilder:
             direction = "b"
         return key, direction
 
-    def _finalise(self, key: Tuple[str, Endpoint, Endpoint]) -> Flow:
+    def _finalise(self, key: StateKey) -> Flow:
         """Create a :class:`Flow` from accumulated packets and remove state."""
 
         state = self._flows.pop(key)
@@ -145,14 +153,12 @@ class FlowBuilder:
         """Emit flows whose last activity is older than ``timeout_s``."""
 
         expired: List[Flow] = []
-        if not self._flows:
-            return expired
-
-        stale: List[Tuple[str, Endpoint, Endpoint]] = []
-        for key, state in self._flows.items():
-            if current_ts - state.last_seen > self.timeout_s:
-                stale.append(key)
-        for key in stale:
+        threshold = current_ts - self.timeout_s
+        while self._last_seen_heap and self._last_seen_heap[0][0] <= threshold:
+            last_seen, key = heappop(self._last_seen_heap)
+            state = self._flows.get(key)
+            if state is None or state.last_seen != last_seen:
+                continue
             expired.append(self._finalise(key))
         return expired
 
