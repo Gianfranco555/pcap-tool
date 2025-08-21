@@ -1,6 +1,6 @@
 import pandas as pd
 
-from pcap_tool.analyze.error_summarizer import ErrorSummarizer
+from pcap_tool.analysis.errors.error_summarizer import ErrorSummarizer
 
 
 def test_summarize_errors_basic():

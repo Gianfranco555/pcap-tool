@@ -1,6 +1,6 @@
 import pandas as pd
 
-from pcap_tool.analyze.security_auditor import SecurityAuditor
+from pcap_tool.analysis.security.security_auditor import SecurityAuditor
 
 
 class FakeEnricher:

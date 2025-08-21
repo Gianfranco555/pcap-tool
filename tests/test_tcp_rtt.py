@@ -5,7 +5,7 @@ from tests.fixtures.pcap_builder import PcapBuilder
 
 from pcap_tool.parser import parse_pcap_to_df
 from pcap_tool.heuristics.metrics import compute_tcp_rtt_stats
-from pcap_tool.analyze.performance_analyzer import PerformanceAnalyzer
+from pcap_tool.analysis.performance.performance_analyzer import PerformanceAnalyzer
 
 
 def _create_pcap(packets, tmp_path: Path, name: str) -> Path:
